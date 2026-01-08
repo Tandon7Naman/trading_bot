@@ -1,0 +1,6 @@
+Timestamp,Algo_ID,Event_Type,Symbol,Action,Price,Quantity,Details
+2026-01-02 00:53:53.050,NAMAN_GOLD_001,SYSTEM,N/A,INFO,0,0,System startup
+2026-01-02 00:53:53.050,NAMAN_GOLD_001,TRADE,MCX:GOLDPETAL,BUY,68500,1,Test buy order
+2026-01-02 00:53:53.051,NAMAN_GOLD_001,TRADE,MCX:GOLDPETAL,SELL,68550,1,Test sell order
+
+2026-01-02 00:53:53 | KILL_SWITCH_ACTIVATED | Max Daily Loss Breached | Loss: ₹-15,000 | Limit: ₹-10,000
