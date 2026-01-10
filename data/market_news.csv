@@ -1,0 +1,4 @@
+timestamp,source,title,description,url,sentiment,polarity,subjectivity
+2026-01-10 18:51:08.887118,Sample News,Market Volatility Impacts Gold Futures Negatively,Gold futures experienced a slight dip today due to unexpected market corrections and profit-taking.,http://example.com/news2,NEUTRAL,0.062,0.568
+2026-01-10 17:51:08.887110,Sample News,Gold Prices Surge Amid Economic Uncertainty,"Investors are flocking to gold as a safe-haven asset, pushing prices to a new high.",http://example.com/news1,POSITIVE,0.165,0.398
+2026-01-09 19:51:08.887120,Sample News,Central Banks Hold Steady on Gold Reserves,Major central banks have reported no significant changes to their gold reserves this quarter.,http://example.com/news3,NEUTRAL,0.008,0.475

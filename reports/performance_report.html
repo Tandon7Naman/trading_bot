@@ -1,0 +1,262 @@
+
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Gold Trading Bot - Performance Report</title>
+                <style>
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    body { 
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        padding: 20px;
+                        min-height: 100vh;
+                    }
+                    .container { 
+                        max-width: 1000px; 
+                        margin: 0 auto; 
+                        background: white; 
+                        border-radius: 12px; 
+                        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                        overflow: hidden;
+                    }
+                    .header {
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        padding: 40px;
+                        text-align: center;
+                    }
+                    .header h1 { font-size: 32px; margin-bottom: 10px; }
+                    .header p { font-size: 14px; opacity: 0.9; }
+                    .content { padding: 40px; }
+                    .metrics-grid {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                        gap: 20px;
+                        margin-bottom: 40px;
+                    }
+                    .metric-card {
+                        background: #f8f9fa;
+                        padding: 20px;
+                        border-radius: 8px;
+                        border-left: 4px solid #667eea;
+                        transition: transform 0.3s, box-shadow 0.3s;
+                    }
+                    .metric-card:hover { transform: translateY(-5px); box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+                    .metric-label { color: #666; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+                    .metric-value { color: #333; font-size: 28px; font-weight: bold; margin-top: 10px; }
+                    .positive { color: #27ae60; }
+                    .negative { color: #e74c3c; }
+                    .table-section {
+                        margin-top: 40px;
+                        padding-top: 40px;
+                        border-top: 2px solid #eee;
+                    }
+                    table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin-top: 20px;
+                    }
+                    th {
+                        background: #667eea;
+                        color: white;
+                        padding: 12px;
+                        text-align: left;
+                        font-weight: 600;
+                    }
+                    td {
+                        padding: 12px;
+                        border-bottom: 1px solid #eee;
+                    }
+                    tr:hover { background: #f8f9fa; }
+                    .footer {
+                        text-align: center;
+                        padding: 20px;
+                        background: #f8f9fa;
+                        color: #666;
+                        font-size: 12px;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                                                <h1>Gold Trading Bot Performance Report</h1>
+                        <p>Performance Report - 2026-01-10 20:10:48</p>
+                    </div>
+                    
+                    <div class="content">
+                        <div class="metrics-grid">
+            
+                    <div class="metric-card">
+                        <div class="metric-label">Total Trades</div>
+                        <div class="metric-value">8</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">Winning Trades</div>
+                        <div class="metric-value">5</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">Losing Trades</div>
+                        <div class="metric-value">3</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">Win Rate (%)</div>
+                        <div class="metric-value">62.5</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">Total P&L</div>
+                        <div class="metric-value positive">$2,336.00</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">Avg Win</div>
+                        <div class="metric-value">1137.0</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">Avg Loss</div>
+                        <div class="metric-value">-1116.33</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">Largest Win</div>
+                        <div class="metric-value">1512.0</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">Largest Loss</div>
+                        <div class="metric-value">-1434.0</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">Profit Factor</div>
+                        <div class="metric-value">1.7</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">Expectancy</div>
+                        <div class="metric-value">292.0</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">Max Win Streak</div>
+                        <div class="metric-value">2</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">Max Loss Streak</div>
+                        <div class="metric-value">1</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">Recovery Factor</div>
+                        <div class="metric-value">1.63</div>
+                    </div>
+                    
+                        </div>
+                        
+                        <div class="table-section">
+                            <h2>Recent Trades</h2>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Entry Date</th>
+                                        <th>Type</th>
+                                        <th>Entry Price</th>
+                                        <th>Exit Price</th>
+                                        <th>P&L</th>
+                                        <th>P&L %</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+            
+                                    <tr>
+                                        <td>2025-04-10</td>
+                                        <td>LONG</td>
+                                        <td>$292.35</td>
+                                        <td>$307.47</td>
+                                        <td class="positive">$1512.00</td>
+                                        <td class="positive">5.17%</td>
+                                    </tr>
+                
+                                    <tr>
+                                        <td>2025-04-17</td>
+                                        <td>LONG</td>
+                                        <td>$306.12</td>
+                                        <td>$315.59</td>
+                                        <td class="positive">$947.00</td>
+                                        <td class="positive">3.09%</td>
+                                    </tr>
+                
+                                    <tr>
+                                        <td>2025-06-02</td>
+                                        <td>LONG</td>
+                                        <td>$311.67</td>
+                                        <td>$301.22</td>
+                                        <td class="negative">$-1045.00</td>
+                                        <td class="negative">-3.35%</td>
+                                    </tr>
+                
+                                    <tr>
+                                        <td>2025-07-18</td>
+                                        <td>LONG</td>
+                                        <td>$308.39</td>
+                                        <td>$316.10</td>
+                                        <td class="positive">$771.00</td>
+                                        <td class="positive">2.50%</td>
+                                    </tr>
+                
+                                    <tr>
+                                        <td>2025-07-22</td>
+                                        <td>LONG</td>
+                                        <td>$316.10</td>
+                                        <td>$307.40</td>
+                                        <td class="negative">$-870.00</td>
+                                        <td class="negative">-2.75%</td>
+                                    </tr>
+                
+                                    <tr>
+                                        <td>2025-08-05</td>
+                                        <td>LONG</td>
+                                        <td>$311.16</td>
+                                        <td>$325.59</td>
+                                        <td class="positive">$1443.00</td>
+                                        <td class="positive">4.64%</td>
+                                    </tr>
+                
+                                    <tr>
+                                        <td>2025-11-12</td>
+                                        <td>LONG</td>
+                                        <td>$385.99</td>
+                                        <td>$371.65</td>
+                                        <td class="negative">$-1434.00</td>
+                                        <td class="negative">-3.72%</td>
+                                    </tr>
+                
+                                    <tr>
+                                        <td>2025-11-26</td>
+                                        <td>LONG</td>
+                                        <td>$383.12</td>
+                                        <td>$393.24</td>
+                                        <td class="positive">$1012.00</td>
+                                        <td class="positive">2.64%</td>
+                                    </tr>
+                
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="footer">
+                        <p>Generated by Gold Trading Bot | © 2026 | All Rights Reserved</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            

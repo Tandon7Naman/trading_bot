@@ -1,0 +1,41 @@
+2026-01-09 01:51:10,746 - INFO - Fetched 250 records for GLD
+2026-01-09 01:51:10,746 - ERROR - Error cleaning GLD data: Index(['timestamp'], dtype='object')
+2026-01-09 01:55:15,373 - INFO - Fetched 250 records for GLD
+2026-01-09 01:55:15,394 - INFO - Cleaned GLD data: 201 rows
+2026-01-09 01:55:15,403 - INFO - Saved GLD data to data/gld_data.csv
+2026-01-10 19:21:36,966 - INFO - Fetched 251 records for GLD
+2026-01-10 19:21:36,988 - INFO - Cleaned GLD data: 202 rows
+2026-01-10 19:21:37,002 - INFO - Saved GLD data to data/gld_data.csv
+2026-01-10 19:41:20,167 - INFO - Initialized PaperTradingEngine with alpaca API
+2026-01-10 19:41:20,167 - INFO - Bot initialized successfully
+2026-01-10 19:41:21,012 - INFO - Fetched 251 records for GLD
+2026-01-10 19:41:21,025 - INFO - Cleaned GLD data: 202 rows
+2026-01-10 19:41:21,029 - INFO - Saved GLD data to data/gld_data.csv
+2026-01-10 19:41:21,029 - WARNING - NewsAPI key not configured. Using sample data.
+2026-01-10 19:41:25,409 - INFO - Saved 3 news articles to data/market_news.csv
+2026-01-10 19:41:25,410 - INFO - Data updated successfully
+2026-01-10 19:41:25,435 - INFO - Signals: 26 BUY, 0 SELL
+2026-01-10 19:41:25,435 - ERROR - Error in backtest: 'charmap' codec can't encode character '\u20b9' in position 27: character maps to <undefined>
+2026-01-10 19:41:26,097 - ERROR - Failed to send message: {"ok":false,"error_code":404,"description":"Not Found"}
+2026-01-10 19:42:34,440 - INFO - Initialized PaperTradingEngine with alpaca API
+2026-01-10 19:42:34,440 - INFO - Bot initialized successfully
+2026-01-10 19:42:35,333 - INFO - Fetched 251 records for GLD
+2026-01-10 19:42:35,343 - INFO - Cleaned GLD data: 202 rows
+2026-01-10 19:42:35,347 - INFO - Saved GLD data to data/gld_data.csv
+2026-01-10 19:42:35,347 - WARNING - NewsAPI key not configured. Using sample data.
+2026-01-10 19:42:36,198 - INFO - Saved 3 news articles to data/market_news.csv
+2026-01-10 19:42:36,198 - INFO - Data updated successfully
+2026-01-10 19:42:36,225 - INFO - Signals: 26 BUY, 0 SELL
+2026-01-10 19:42:36,225 - ERROR - Error in backtest: 'charmap' codec can't encode character '\u20b9' in position 27: character maps to <undefined>
+2026-01-10 19:42:36,986 - ERROR - Failed to send message: {"ok":false,"error_code":404,"description":"Not Found"}
+2026-01-10 19:51:08,169 - INFO - Initialized PaperTradingEngine with alpaca API
+2026-01-10 19:51:08,169 - INFO - Bot initialized successfully
+2026-01-10 19:51:08,873 - INFO - Fetched 251 records for GLD
+2026-01-10 19:51:08,882 - INFO - Cleaned GLD data: 202 rows
+2026-01-10 19:51:08,886 - INFO - Saved GLD data to data/gld_data.csv
+2026-01-10 19:51:08,887 - WARNING - NewsAPI key not configured. Using sample data.
+2026-01-10 19:51:09,791 - INFO - Saved 3 news articles to data/market_news.csv
+2026-01-10 19:51:09,791 - INFO - Data updated successfully
+2026-01-10 19:51:09,817 - INFO - Signals: 26 BUY, 0 SELL
+2026-01-10 19:51:09,818 - ERROR - Error in backtest: 'charmap' codec can't encode character '\u20b9' in position 27: character maps to <undefined>
+2026-01-10 19:51:10,701 - INFO - Message sent successfully

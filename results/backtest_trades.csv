@@ -1,0 +1,4 @@
+entry_date,entry_price,exit_date,exit_price,type,units,pnl,pnl_percent,reason
+2025-10-24,377.52,2025-10-27,367.01,LONG,100,-1051.0,-2.78,SL
+2025-11-11,379.87,2025-11-17,371.65,LONG,100,-822.0,-2.16,SL
+2025-11-18,374.35,2025-11-26,383.12,LONG,100,877.0,2.34,TP

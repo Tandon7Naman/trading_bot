@@ -1,0 +1,41 @@
+{
+  "telegram": {
+    "bot_token": "8553846324:AAFYGH0dqjqimYDsAdKWwnRBYs-GMc-D5pU",
+    "chat_id": "8410246010"
+  },
+  "paper_trading": {
+    "api_choice": "alpaca",
+    "initial_capital": 100000,
+    "trade_quantity": 100,
+    "api_key": "YOUR_API_KEY_HERE",
+    "secret_key": "YOUR_SECRET_KEY_HERE"
+  },
+  "backtest": {
+    "initial_capital": 100000,
+    "tp_percent": 2.5,
+    "sl_percent": 1.5
+  },
+  "data_sources": {
+    "gld": {
+      "symbol": "GLD",
+      "days": 365,
+      "update_frequency": "daily"
+    }
+  },
+  "logging": {
+    "level": "INFO",
+    "max_file_size": 10485760,
+    "backup_count": 5
+  },
+  "scheduling": {
+    "daily_update_time": "09:00",
+    "market_open_time": "09:15",
+    "market_close_time": "16:00",
+    "daily_report_time": "16:30"
+  },
+  "email_alerts": {
+    "sender_email": "tandonnaman4@gmail.com",
+    "app_password": "rwbb lmsu sdem fxyb",
+    "recipient_email": "tandonkamesh@gmail.com"
+  }
+}

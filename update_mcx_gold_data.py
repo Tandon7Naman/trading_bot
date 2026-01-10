@@ -1,4 +1,4 @@
-# update_gld_data.py - FIXED VERSION
+# update_mcx_gold_data.py - FIXED VERSION
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -7,33 +7,38 @@ import os
 import logging
 
 logging.basicConfig(
-    filename='logs/update_gld_data.log',
+    filename='logs/update_mcx_gold_data.log',
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-def fetch_gld_data(symbol='GLD', days=365):
-    """Fetch GLD (SPDR Gold Shares) ETF data with robust error handling"""
+def fetch_mcx_gold_data(symbol='GC=F', days=365):
+    """
+    Fetch MCX Gold data using yfinance
+    Note: Using GC=F (COMEX Gold Futures) as proxy for MCX Gold
+    Alternative symbols: GOLD (MCX via yfinance if available)
+    """
     try:
         start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
         end_date = datetime.now().strftime('%Y-%m-%d')
         
         print(f"[*] Fetching {symbol} data from {start_date} to {end_date}...")
         
+        # GC=F is COMEX Gold (most reliable alternative to MCX)
         df = yf.download(symbol, start=start_date, end=end_date, progress=False)
         
-        # Handle case where yfinance returns a Series instead of DataFrame
+        # Handle case where yfinance returns a Series
         if isinstance(df, pd.Series):
             df = df.to_frame()
         
-        # Flatten multi-level columns if they exist
+        # Flatten multi-level columns
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.droplevel(1)
         
-        # Reset index to make Date a column
+        # Reset index
         df = df.reset_index()
         
-        # Rename columns to lowercase for consistency
+        # Rename columns to lowercase
         df.columns = df.columns.str.lower()
         
         print(f"[+] Downloaded {len(df)} records")
@@ -43,29 +48,16 @@ def fetch_gld_data(symbol='GLD', days=365):
         return df
         
     except Exception as e:
-        logging.error(f"Error fetching {symbol} data: {str(e)}")
+        logging.error(f"Error fetching MCX Gold data: {str(e)}")
         print(f"[-] Error fetching data: {str(e)}")
         return None
 
-def calculate_rsi(prices, period=14):
-    """Calculate RSI indicator safely"""
+def clean_mcx_data(df):
+    """Clean and prepare MCX data"""
     try:
-        delta = prices.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-        rs = gain / loss
-        rsi = 100 - (100 / (1 + rs))
-        return rsi
-    except Exception as e:
-        logging.error(f"Error calculating RSI: {str(e)}")
-        return pd.Series([np.nan] * len(prices))
-
-def clean_gld_data(df):
-    """Clean GLD data with robust error handling"""
-    try:
-        print("[*] Cleaning GLD data...")
+        print("[*] Cleaning MCX data...")
         
-        # Check if we have the required 'close' column
+        # Check for close column
         if 'close' not in df.columns:
             logging.error(f"Close column not found. Available columns: {list(df.columns)}")
             print(f"[-] Close column not found. Available columns: {list(df.columns)}")
@@ -93,50 +85,42 @@ def clean_gld_data(df):
         print("[*] Calculating technical indicators...")
         
         df['SMA_20'] = df['close'].rolling(window=20).mean()
-        print("[+] SMA_20 calculated")
-        
         df['SMA_50'] = df['close'].rolling(window=50).mean()
-        print("[+] SMA_50 calculated")
-        
-        df['RSI'] = calculate_rsi(df['close'], 14)
-        print("[+] RSI calculated")
-        
         df['Daily_Return'] = df['close'].pct_change()
-        print("[+] Daily_Return calculated")
         
         # Remove NaN from indicator calculations
         df = df.dropna()
         print(f"[+] Removed NaN from indicators: {len(df)} records remain")
         
-        logging.info(f"Cleaned GLD data: {len(df)} rows")
+        logging.info(f"Cleaned MCX data: {len(df)} rows")
         print(f"[+] Data cleaning complete: {len(df)} rows")
         return df
         
     except Exception as e:
-        logging.error(f"Error cleaning GLD data: {str(e)}")
+        logging.error(f"Error cleaning MCX data: {str(e)}")
         print(f"[-] Error cleaning data: {str(e)}")
         return None
 
-def save_gld_data(df, filepath='data/gld_data.csv'):
-    """Save GLD data"""
+def save_mcx_data(df, filepath='data/mcx_gold_data.csv'):
+    """Save cleaned data to CSV"""
     try:
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         df.to_csv(filepath, index=False)
-        logging.info(f"Saved GLD data to {filepath}")
+        logging.info(f"Saved MCX data to {filepath}")
         print(f"[+] Data saved to {filepath}")
         return True
     except Exception as e:
-        logging.error(f"Error saving GLD data: {str(e)}")
+        logging.error(f"Error saving MCX data: {str(e)}")
         print(f"[-] Error saving data: {str(e)}")
         return False
 
 def main():
     print("\n" + "="*60)
-    print("[*] Starting GLD data update...")
+    print("[*] Starting MCX Gold data update...")
     print("="*60)
     
-    # Fetch data
-    df = fetch_gld_data('GLD', days=365)
+    # Fetch data (using COMEX as proxy)
+    df = fetch_mcx_gold_data('GC=F', days=365)
     if df is None:
         print("[-] Failed to fetch data")
         return False
@@ -145,14 +129,14 @@ def main():
     print(df.head(2))
     
     # Clean data
-    df = clean_gld_data(df)
+    df = clean_mcx_data(df)
     if df is None:
         print("[-] Failed to clean data")
         return False
     
     # Save data
-    if save_gld_data(df):
-        print(f"\n[+] Successfully updated GLD data ({len(df)} records)")
+    if save_mcx_data(df):
+        print(f"\n[+] Successfully updated MCX Gold data ({len(df)} records)")
         print(f"[+] Date range: {df['date'].min()} to {df['date'].max()}")
         print("="*60 + "\n")
         return True
