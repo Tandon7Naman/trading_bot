@@ -39,3 +39,17 @@
 2026-01-10 19:51:09,817 - INFO - Signals: 26 BUY, 0 SELL
 2026-01-10 19:51:09,818 - ERROR - Error in backtest: 'charmap' codec can't encode character '\u20b9' in position 27: character maps to <undefined>
 2026-01-10 19:51:10,701 - INFO - Message sent successfully
+2026-01-11 12:51:48,896 - INFO - Initialized PaperTradingEngine with alpaca API
+2026-01-11 12:51:48,897 - INFO - Bot initialized successfully
+2026-01-11 12:51:54,374 - ERROR - 
+1 Failed download:
+2026-01-11 12:51:54,374 - ERROR - ['GLD']: TypeError("'NoneType' object is not subscriptable")
+2026-01-11 12:51:54,400 - INFO - Fetched 0 records for GLD
+2026-01-11 12:51:54,423 - INFO - Cleaned GLD data: 0 rows
+2026-01-11 12:51:54,436 - INFO - Saved GLD data to data/gld_data.csv
+2026-01-11 12:51:54,437 - WARNING - NewsAPI key not configured. Using sample data.
+2026-01-11 12:52:15,007 - INFO - Saved 3 news articles to data/market_news.csv
+2026-01-11 12:52:15,007 - INFO - Data updated successfully
+2026-01-11 12:52:15,026 - INFO - Signals: 0 BUY, 0 SELL
+2026-01-11 12:52:15,027 - ERROR - Error in backtest: single positional indexer is out-of-bounds
+2026-01-11 12:52:15,045 - ERROR - Error sending message: HTTPSConnectionPool(host='api.telegram.org', port=443): Max retries exceeded with url: /bot8553846324:AAFYGH0dqjqimYDsAdKWwnRBYs-GMc-D5pU/sendMessage (Caused by NameResolutionError("HTTPSConnection(host='api.telegram.org', port=443): Failed to resolve 'api.telegram.org' ([Errno 11002] getaddrinfo failed)"))
