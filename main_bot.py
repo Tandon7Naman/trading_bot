@@ -9,7 +9,7 @@ import numpy as np
 from datetime import datetime, timedelta
 import logging
 import os
-import json
+from dotenv import load_dotenv
 import sys
 
 # Import custom modules
@@ -18,6 +18,8 @@ from fetch_market_news import main as fetch_news
 from backtest_strategy_rulebased import RuleBasedBacktestEngine
 from paper_trading import PaperTradingEngine
 from telegram_alerts import TelegramAlerts
+
+load_dotenv()
 
 logging.basicConfig(
     filename='logs/main_bot.log',
@@ -28,22 +30,28 @@ logging.basicConfig(
 class GoldTradingBot:
     """Main bot orchestrator with rule-based strategy"""
     
-    def __init__(self, config_file='config.json'):
+    def __init__(self):
         """Initialize bot"""
         try:
-            with open(config_file, 'r') as f:
-                self.config = json.load(f)
-            
+            # Load configuration from environment variables
+            self.telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+            self.telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
+            self.paper_trading_api_choice = os.getenv("PAPER_TRADING_API_CHOICE", "paper")
+            self.paper_trading_initial_capital = float(os.getenv("PAPER_TRADING_INITIAL_CAPITAL", "100000"))
+            self.paper_trading_trade_quantity = int(os.getenv("PAPER_TRADING_TRADE_QUANTITY", "10"))
+            self.backtest_tp_percent = float(os.getenv("BACKTEST_TP_PERCENT", "2.0"))
+            self.backtest_sl_percent = float(os.getenv("BACKTEST_SL_PERCENT", "1.0"))
+
             # Initialize alerts
             self.alerts = TelegramAlerts(
-                self.config['telegram']['bot_token'],
-                self.config['telegram']['chat_id']
+                self.telegram_bot_token,
+                self.telegram_chat_id
             )
             
             # Initialize paper trading
             self.paper_trading = PaperTradingEngine(
-                api_choice=self.config['paper_trading']['api_choice'],
-                initial_capital=self.config['paper_trading']['initial_capital']
+                api_choice=self.paper_trading_api_choice,
+                initial_capital=self.paper_trading_initial_capital
             )
             
             logging.info("Bot initialized successfully")
@@ -88,9 +96,9 @@ class GoldTradingBot:
             df = pd.read_csv('data/gld_data.csv')
             
             engine = RuleBasedBacktestEngine(
-                initial_capital=self.config['paper_trading']['initial_capital'],
-                tp_percent=self.config['backtest']['tp_percent'],
-                sl_percent=self.config['backtest']['sl_percent']
+                initial_capital=self.paper_trading_initial_capital,
+                tp_percent=self.backtest_tp_percent,
+                sl_percent=self.backtest_sl_percent
             )
             
             # Generate signals
@@ -136,7 +144,7 @@ class GoldTradingBot:
                 return False
             
             symbol = 'GLD'
-            quantity = self.config['paper_trading']['trade_quantity']
+            quantity = self.paper_trading_trade_quantity
             price = signal_data['close']
             trade_id = f"BOT_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             
@@ -226,7 +234,7 @@ class GoldTradingBot:
 def main():
     """Main entry point"""
     try:
-        bot = GoldTradingBot('config.json')
+        bot = GoldTradingBot()
         success = bot.run_full_cycle()
         sys.exit(0 if success else 1)
     except Exception as e:

@@ -114,12 +114,28 @@ class FeatureEngine:
         return 0.0
     
     # Fair Value (1)
-    def calculate_fair_value_feature(self, spot_gold_usd, usdinr, duty_rate, current_price):
-        fair_value = spot_gold_usd * usdinr * (1 + duty_rate)
+    def calculate_fair_value_feature(self, spot_gold_usd, usdinr, duty_rate, current_price, bank_premium_pct=0.015, gst_rate=0.03):
+        """
+        Calculates the deviation of the current price from the fully-costed fair value.
+        This version includes unit conversion, import duty, bank premium, and GST.
+        """
+        # Constants for conversion
+        GRAMS_PER_OUNCE = 31.1034768
+        CONVERSION_FACTOR_10G = 10 / GRAMS_PER_OUNCE
+
+        # Calculate the fair value
+        base_price_inr = spot_gold_usd * usdinr * CONVERSION_FACTOR_10G
+        landed_cost = base_price_inr * (1 + duty_rate)
+        landed_cost_with_premium = landed_cost * (1 + bank_premium_pct)
+        fair_value = landed_cost_with_premium * (1 + gst_rate)
+
         if current_price == 0:
             return 0.0
-        deviation = (fair_value - current_price) / current_price
-        return float(np.tanh(deviation))
+        
+        # Calculate the deviation and normalize it
+        deviation = (current_price - fair_value) / fair_value
+        return float(np.tanh(deviation * 10)) # Use a multiplier to increase sensitivity
+
     
     # Helper
     def _ema(self, data, period):

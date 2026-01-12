@@ -5,11 +5,14 @@ Integrates all modules for complete automated trading
 """
 
 import pandas as pd
-import json
 import sys
 import os
 from datetime import datetime
 import logging
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(
@@ -26,9 +29,17 @@ try:
     # PHASE 1: Initialize Bot
     print("[*] PHASE 1: Initializing bot...")
     
-    # Load configuration
-    with open('config.json', 'r') as f:
-        config = json.load(f)
+    # Load configuration from environment variables
+    telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    sender_email = os.getenv("GMAIL_SENDER")
+    app_password = os.getenv("GMAIL_PASSWORD")
+    recipient_email = os.getenv("RECIPIENT_EMAIL")
+    paper_trading_api_choice = os.getenv("PAPER_TRADING_API_CHOICE", "paper")
+    paper_trading_initial_capital = float(os.getenv("PAPER_TRADING_INITIAL_CAPITAL", "100000"))
+    paper_trading_trade_quantity = int(os.getenv("PAPER_TRADING_TRADE_QUANTITY", "10"))
+    backtest_tp_percent = float(os.getenv("BACKTEST_TP_PERCENT", "2.0"))
+    backtest_sl_percent = float(os.getenv("BACKTEST_SL_PERCENT", "1.0"))
     
     # Import all modules
     from telegram_alerts import TelegramAlerts
@@ -38,23 +49,23 @@ try:
     
     # Initialize components
     telegram = TelegramAlerts(
-        config['telegram']['bot_token'],
-        config['telegram']['chat_id']
+        telegram_bot_token,
+        telegram_chat_id
     )
     
     email = EmailAlerts(
-        config['email_alerts']['sender_email'],
-        config['email_alerts']['app_password'],
-        config['email_alerts']['recipient_email']
+        sender_email,
+        app_password,
+        recipient_email
     )
     
     paper_trading = PaperTradingEngine(
-        api_choice=config['paper_trading']['api_choice'],
-        initial_capital=config['paper_trading']['initial_capital']
+        api_choice=paper_trading_api_choice,
+        initial_capital=paper_trading_initial_capital
     )
     
     risk_manager = RiskManager(
-        initial_capital=config['paper_trading']['initial_capital'],
+        initial_capital=paper_trading_initial_capital,
         max_risk_percent=2.0,
         max_drawdown_percent=5.0
     )
@@ -83,9 +94,9 @@ try:
         df = pd.read_csv('data/gld_data.csv')
         
         engine = RuleBasedBacktestEngine(
-            initial_capital=config['paper_trading']['initial_capital'],
-            tp_percent=config['backtest']['tp_percent'],
-            sl_percent=config['backtest']['sl_percent']
+            initial_capital=paper_trading_initial_capital,
+            tp_percent=backtest_tp_percent,
+            sl_percent=backtest_sl_percent
         )
         
         df = engine.generate_signals(df)
@@ -125,7 +136,7 @@ try:
                 logging.warning(f"Trade blocked: {reason}")
             else:
                 symbol = 'GLD'
-                quantity = config['paper_trading']['trade_quantity']
+                quantity = paper_trading_trade_quantity
                 price = latest_close
                 trade_id = f"BOT_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                 
