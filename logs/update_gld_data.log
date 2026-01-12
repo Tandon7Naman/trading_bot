@@ -53,3 +53,14 @@
 2026-01-11 12:52:15,026 - INFO - Signals: 0 BUY, 0 SELL
 2026-01-11 12:52:15,027 - ERROR - Error in backtest: single positional indexer is out-of-bounds
 2026-01-11 12:52:15,045 - ERROR - Error sending message: HTTPSConnectionPool(host='api.telegram.org', port=443): Max retries exceeded with url: /bot8553846324:AAFYGH0dqjqimYDsAdKWwnRBYs-GMc-D5pU/sendMessage (Caused by NameResolutionError("HTTPSConnection(host='api.telegram.org', port=443): Failed to resolve 'api.telegram.org' ([Errno 11002] getaddrinfo failed)"))
+2026-01-12 09:00:08,922 - INFO - Initialized PaperTradingEngine with alpaca API
+2026-01-12 09:00:08,922 - INFO - Bot initialized successfully
+2026-01-12 09:00:11,825 - INFO - Fetched 250 records for GLD
+2026-01-12 09:00:11,845 - INFO - Cleaned GLD data: 201 rows
+2026-01-12 09:00:11,857 - INFO - Saved GLD data to data/gld_data.csv
+2026-01-12 09:00:11,857 - WARNING - NewsAPI key not configured. Using sample data.
+2026-01-12 09:00:23,997 - INFO - Saved 3 news articles to data/market_news.csv
+2026-01-12 09:00:23,997 - INFO - Data updated successfully
+2026-01-12 09:00:24,023 - INFO - Signals: 26 BUY, 0 SELL
+2026-01-12 09:00:24,023 - ERROR - Error in backtest: 'charmap' codec can't encode character '\u20b9' in position 27: character maps to <undefined>
+2026-01-12 09:00:24,894 - INFO - Message sent successfully

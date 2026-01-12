@@ -98,18 +98,27 @@ class GoldTradingEnv(gym.Env):
         # Execute action
         if action == 1 and self.position == 0:  # BUY
             trade_executed = self._execute_buy(current_price)
+            if trade_executed:
+                reward = 0.1  # small incentive to take a position
             
         elif action == 2 and self.position == 1:  # SELL
             trade_executed = self._execute_sell(current_price)
-            pnl = self.trades[-1]['pnl']
-            reward = pnl / self.initial_capital * 100  # Normalize reward
+            if trade_executed and len(self.trades) > 0:
+                pnl = self.trades[-1]['pnl']
+                reward = pnl / self.initial_capital * 100  # Normalize reward
         
         # Calculate unrealized P&L for open positions
         if self.position == 1:
             self.unrealized_pnl = (current_price - self.entry_price) * 1
-            # Small reward for holding profitable position
+            # Reward/penalize based on unrealized P&L while holding
             if self.unrealized_pnl > 0:
+                reward += self.unrealized_pnl / self.initial_capital * 5
+            else:
                 reward += self.unrealized_pnl / self.initial_capital * 10
+
+        # Small penalty for staying idle in cash
+        if self.position == 0 and action == 0:
+            reward -= 0.01
         
         # Penalize excessive trading (ignore open trades with no exit yet)
         if len(self.trades) > 0:
@@ -134,7 +143,10 @@ class GoldTradingEnv(gym.Env):
         
         # Check if episode is done
         terminated = self.current_step >= self.max_steps
-        truncated = self.capital < self.initial_capital * 0.7  # 30% loss
+
+        # Only truncate on severe capital loss (70% drawdown)
+        capital_loss_pct = (self.capital - self.initial_capital) / self.initial_capital
+        truncated = capital_loss_pct < -0.7
         
         observation = self._get_observation()
         info = self._get_info()
