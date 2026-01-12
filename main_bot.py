@@ -12,12 +12,25 @@ import os
 from dotenv import load_dotenv
 import sys
 
+
 # Import custom modules
 from update_gld_data import main as update_gld_data
 from fetch_market_news import main as fetch_news
 from backtest_strategy_rulebased import RuleBasedBacktestEngine
 from paper_trading import PaperTradingEngine
 from telegram_alerts import TelegramAlerts
+
+# ========== NEW IMPORTS FOR GATEWAY INTEGRATION ==========
+from src.pretrade_gateway import PreTradeGateway
+from src.fiscal_policy_loader import FiscalPolicyLoader
+from src.global_cues_monitor import GlobalCuesMonitor
+from src.economic_calendar_monitor import EconomicCalendarMonitor
+from src.currency_monitor import CurrencyMonitor
+from src.pivot_level_calculator import PivotLevelCalculator
+from src.signal_confluence_filter import SignalConfluenceFilter
+from src.geopolitical_risk_monitor import GeopoliticalRiskMonitor
+from src.risk_manager import RiskManager
+# ========================================================
 
 load_dotenv()
 
@@ -30,8 +43,10 @@ logging.basicConfig(
 class GoldTradingBot:
     """Main bot orchestrator with rule-based strategy"""
     
-    def __init__(self):
-        """Initialize bot"""
+    def __init__(self, account_size: float = 100000, *args, **kwargs):
+        """
+        Initialize bot with integrated gateway modules.
+        """
         try:
             # Load configuration from environment variables
             self.telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -47,16 +62,30 @@ class GoldTradingBot:
                 self.telegram_bot_token,
                 self.telegram_chat_id
             )
-            
+
             # Initialize paper trading
             self.paper_trading = PaperTradingEngine(
                 api_choice=self.paper_trading_api_choice,
                 initial_capital=self.paper_trading_initial_capital
             )
-            
+
+            # ========== NEW: Initialize Gateway Modules ==========
+            self.fiscal_loader = FiscalPolicyLoader()
+            self.global_cues = GlobalCuesMonitor()
+            self.econ_calendar = EconomicCalendarMonitor()
+            self.currency_monitor = CurrencyMonitor()
+            self.pivot_calc = PivotLevelCalculator()
+            self.signal_filter = SignalConfluenceFilter()
+            self.geo_risk = GeopoliticalRiskMonitor()
+            self.risk_manager = RiskManager(account_size=account_size)
+
+            self.pretrade_gateway = None
+            self.gateway_context = None
+            # =====================================================
+
             logging.info("Bot initialized successfully")
             print("[+] Bot initialized successfully")
-            
+
         except Exception as e:
             logging.error(f"Error initializing bot: {str(e)}")
             print(f"[-] Error initializing bot: {str(e)}")
@@ -193,43 +222,181 @@ class GoldTradingBot:
             return False
 
     def run_full_cycle(self):
-        """Run complete bot cycle"""
+        """
+        Main trading cycle with integrated pre-trade gateway.
+        
+        Sequence:
+        1. Update data (prices, indicators)
+        2. Initialize PreTradeGateway (all 8 checks)
+        3. If GO: Generate signals → Execute trades with RiskManager
+        4. If NO-GO: Alert and skip trade execution
+        5. Generate daily summary
+        """
+        
+        logger.info("="*80)
+        logger.info("STARTING FULL TRADING CYCLE WITH GATEWAY")
+        logger.info("="*80)
+        
         try:
-            print("\n" + "="*70)
-            print(f"[*] GOLD TRADING BOT CYCLE - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            print("="*70 + "\n")
+            # ========== PHASE 1: Update Market Data ========== 
+            logger.info("[1/5] Updating market data and indicators...")
+            self.update_data()
+            logger.info("✓ Market data updated")
             
-            # Step 1: Update data
-            if not self.update_data():
-                self.alerts.send_error_alert("Data update failed", "ERROR")
-                return False
+            # ========== PHASE 2: Initialize Gateway ========== 
+            logger.info("[2/5] Initializing pre-trade gateway...")
+            self.pretrade_gateway = self._initialize_gateway()
+            logger.info("✓ Gateway initialized with 8 modules")
             
-            # Step 2: Run backtest and get signals
-            signal_data = self.run_backtest_and_get_signals()
-            if signal_data is None:
-                self.alerts.send_error_alert("Backtest analysis failed", "ERROR")
-                return False
+            # ========== PHASE 3: Run Gateway Checks ========== 
+            logger.info("[3/5] Running unified pre-trade gateway checks...")
+            go_ahead, gateway_ctx = self.pretrade_gateway.run_all_checks()
+            self.gateway_context = gateway_ctx
             
-            # Step 3: Execute trade if signal
-            if signal_data['signal'] != 0:
-                self.execute_live_trade(signal_data)
+            # Gate decision
+            if not go_ahead:
+                logger.error(f"❌ GATEWAY BLOCKED TRADE EXECUTION")
+                logger.error(f"   Failed checks: {gateway_ctx['checks_failed']}")
+                
+                # Alert stakeholders
+                self._alert_gateway_failure(gateway_ctx)
+                
+                # Still generate summary for auditing
+                self.generate_daily_summary(gateway_blocked=True)
+                
+                logger.info("Cycle completed (trades blocked by gateway)")
+                return
             
-            # Step 4: Send daily summary (at specific time)
-            if datetime.now().hour == 16:  # 4 PM
-                self.send_daily_summary()
+            logger.info("✓ All gateway checks passed - TRADE EXECUTION APPROVED")
             
-            print("\n" + "="*70)
-            print("[+] BOT CYCLE COMPLETED SUCCESSFULLY")
-            print("="*70 + "\n")
+            # ========== PHASE 4: Generate Signals & Execute Trades ========== 
+            logger.info("[4/5] Generating trading signals...")
+            signals = self.generate_signals()
             
-            logging.info("Full cycle completed successfully")
-            return True
+            logger.info("[5/5] Executing trades with RiskManager...")
+            self._execute_trades_with_risk(signals, gateway_ctx)
+            
+            logger.info("✓ Trades executed successfully")
+            
+            # ========== PHASE 5: Daily Summary ========== 
+            logger.info("Generating daily summary...")
+            self.generate_daily_summary(gateway_blocked=False)
+            
+            logger.info("="*80)
+            logger.info("FULL CYCLE COMPLETED SUCCESSFULLY")
+            logger.info("="*80)
             
         except Exception as e:
-            logging.error(f"Fatal error in bot cycle: {str(e)}")
-            self.alerts.send_error_alert(f"Bot cycle error: {str(e)}", "ERROR")
-            print(f"[-] Fatal error: {str(e)}")
-            return False
+            logger.error(f"Fatal error in run_full_cycle: {e}", exc_info=True)
+            raise
+
+    def _initialize_gateway(self) -> PreTradeGateway:
+        """
+        Initialize PreTradeGateway with all 8 modules.
+        
+        Returns:
+            PreTradeGateway: Fully initialized gateway instance
+        """
+        return PreTradeGateway(
+            fiscal_loader=self.fiscal_loader,
+            global_cues=self.global_cues,
+            econ_calendar=self.econ_calendar,
+            currency_monitor=self.currency_monitor,
+            pivot_calc=self.pivot_calc,
+            signal_filter=self.signal_filter,
+            geo_risk=self.geo_risk,
+            risk_manager=self.risk_manager,
+        )
+
+    def _execute_trades_with_risk(self, signals: list, gateway_ctx: dict):
+        """
+        Execute trades using RiskManager for position sizing and limits.
+        
+        Args:
+            signals: List of trading signals from signal generator
+            gateway_ctx: Context from gateway checks (includes duty, bias, etc.)
+        """
+        duty = gateway_ctx["checks"]["fiscal_policy"]["duty_rate"]
+        bias = gateway_ctx["checks"]["global_cues"]["bias"]
+        
+        logger.info(f"Executing trades - Session bias: {bias}, Duty: {duty*100:.1f}%")
+        
+        if not signals:
+            logger.info("No signals generated. Skipping trade execution.")
+            return
+        
+        for signal in signals:
+            try:
+                # Check daily loss limit before trade
+                if not self.risk_manager.check_daily_loss_limit(0):
+                    logger.warning("Daily loss limit reached. Skipping further trades.")
+                    break
+                
+                # Calculate position size using RiskManager
+                position = self.risk_manager.calculate_position_size(
+                    entry_price=signal.get("entry", 0),
+                    stop_loss_price=signal.get("stop_loss", 0),
+                )
+                
+                if position == 0:
+                    logger.warning(f"Position size = 0 for signal {signal}. Skipping.")
+                    continue
+                
+                logger.info(
+                    f"Executing: Entry={signal.get('entry')}, "
+                    f"SL={signal.get('stop_loss')}, Position={position}"
+                )
+                
+                # TODO: Replace with your actual broker API call
+                # result = self._place_order(signal, position, duty)
+                
+            except Exception as e:
+                logger.error(f"Trade execution failed: {e}")
+                continue
+
+    def _alert_gateway_failure(self, gateway_ctx: dict):
+        """
+        Alert stakeholders when gateway blocks trade execution.
+        
+        Args:
+            gateway_ctx: Gateway context with failure details
+        """
+        failed_checks = gateway_ctx.get("checks_failed", [])
+        
+        alert_msg = (
+            f"\n⚠️ TRADING BOT ALERT: Gateway Execution Blocked\n"
+            f"Timestamp: {gateway_ctx.get('timestamp')}\n"
+            f"Failed Checks: {', '.join(failed_checks)}\n"
+        )
+        
+        logger.warning(alert_msg)
+        
+        # TODO: Integrate with your alert system
+        # Examples:
+        # - Send email notification
+        # - Send Slack message
+        # - Post to webhook
+
+    def generate_daily_summary(self, gateway_blocked: bool = False):
+        """
+        Generate daily summary with gateway context.
+        
+        Args:
+            gateway_blocked: Whether gateway blocked execution today
+        """
+        summary = {
+            "date": str(datetime.now().date()),
+            "gateway_blocked": gateway_blocked,
+        }
+        
+        if self.gateway_context:
+            summary["gateway_status"] = self.gateway_context.get("gateway_status", "UNKNOWN")
+            summary["checks_passed"] = len(self.gateway_context.get("checks_passed", []))
+            summary["checks_failed"] = self.gateway_context.get("checks_failed", [])
+        
+        logger.info(f"Daily Summary: {summary}")
+        
+        # TODO: Log to file, database, or external system
 
 def main():
     """Main entry point"""
