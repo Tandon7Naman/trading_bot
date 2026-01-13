@@ -64,3 +64,9 @@
 2026-01-12 09:00:24,023 - INFO - Signals: 26 BUY, 0 SELL
 2026-01-12 09:00:24,023 - ERROR - Error in backtest: 'charmap' codec can't encode character '\u20b9' in position 27: character maps to <undefined>
 2026-01-12 09:00:24,894 - INFO - Message sent successfully
+2026-01-13 21:04:47,736 - INFO - Initialized PaperTradingEngine with paper API
+2026-01-13 21:04:47,736 - INFO - Bot initialized successfully
+2026-01-13 21:07:16,652 - INFO - Initialized PaperTradingEngine with paper API
+2026-01-13 21:07:16,652 - INFO - Bot initialized successfully
+2026-01-13 21:09:26,342 - INFO - Initialized PaperTradingEngine with paper API
+2026-01-13 21:09:26,342 - INFO - Bot initialized successfully
