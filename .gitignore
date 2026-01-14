@@ -32,3 +32,6 @@ terraform/
 
 # Config files
 config.json
+.env
+*.log
+__pycache__/
