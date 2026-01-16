@@ -1,100 +1,30 @@
-# telegram_alerts.py
+# -*- coding: utf-8 -*-
 import requests
-import logging
-from datetime import datetime
-import json
 
-logging.basicConfig(
-    filename='logs/telegram_alerts.log',
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+# --- PASTE YOUR KEYS HERE ---
+BOT_TOKEN = "8553846324:AAFYGH0dqjqimYDsAdKWwnRBYs-GMc-D5pU" 
+CHAT_ID = "8410246010"
 
-class TelegramAlerts:
-    """Send trading alerts via Telegram"""
+def send_telegram_message(message):
+    # This function sends a simple text message to your phone
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    data = {
+        "chat_id": CHAT_ID,
+        "text": message
+    }
     
-    def __init__(self, bot_token, chat_id):
-        """
-        Initialize Telegram bot
-        Get bot token from BotFather: https://t.me/botfather
-        Get chat ID from your chat with the bot
-        """
-        self.bot_token = bot_token
-        self.chat_id = chat_id
-        self.base_url = f"https://api.telegram.org/bot{bot_token}"
-    
-    def send_message(self, message, parse_mode='HTML'):
-        """Send plain text message"""
-        try:
-            url = f"{self.base_url}/sendMessage"
-            payload = {
-                'chat_id': self.chat_id,
-                'text': message,
-                'parse_mode': parse_mode
-            }
-            
-            response = requests.post(url, json=payload, timeout=10)
-            
-            if response.status_code == 200:
-                logging.info(f"Message sent successfully")
-                return True
-            else:
-                logging.error(f"Failed to send message: {response.text}")
-                return False
-                
-        except Exception as e:
-            logging.error(f"Error sending message: {str(e)}")
-            return False
-    
-    def send_buy_alert(self, symbol, price, quantity, reason):
-        """Send BUY signal alert"""
-        try:
-            message = f"""
-<b>🟢 BUY SIGNAL</b>
-Symbol: {symbol}
-Entry Price: ₹{price:.2f}
-Quantity: {quantity}
-Reason: {reason}
-Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-            """
-            return self.send_message(message.strip())
-        except Exception as e:
-            logging.error(f"Error sending BUY alert: {str(e)}")
-            return False
-    
-    def send_sell_alert(self, symbol, entry_price, exit_price, quantity, pnl, pnl_percent, reason):
-        """Send SELL signal alert"""
-        try:
-            pnl_emoji = "📈" if pnl > 0 else "📉"
-            message = f"""
-<b>🔴 SELL SIGNAL {pnl_emoji}</b>
-Symbol: {symbol}
-Entry Price: ₹{entry_price:.2f}
-Exit Price: ₹{exit_price:.2f}
-Quantity: {quantity}
-P&L: ₹{pnl:.2f} ({pnl_percent:+.2f}%)
-Reason: {reason}
-Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-            """
-            return self.send_message(message.strip())
-        except Exception as e:
-            logging.error(f"Error sending SELL alert: {str(e)}")
-            return False
-    
-    def send_daily_summary(self, summary_data):
-        """Send daily trading summary"""
-        try:
-            message = f"""
-<b>📊 DAILY TRADING SUMMARY</b>
+    try:
+        response = requests.post(url, data=data)
+        if response.status_code == 200:
+            print("   SUCCESS: Telegram Alert Sent!")
+        else:
+            print(f"   FAIL: {response.text}")
+    except Exception as e:
+        print(f"   ERROR: {e}")
 
-Initial Capital: ₹{summary_data.get('initial_capital', 0):.2f}
-Current Balance: ₹{summary_data.get('current_balance', 0):.2f}
-Total P&L: ₹{summary_data.get('total_realized_pnl', 0):.2f}
-
-Total Trades: {summary_data.get('total_trades', 0)}
-Winning Trades: {summary_data.get('winning_trades', 0)}
-Losing Trades: {summary_data.get('losing_trades', 0)}
-Win Rate: {summary_data.get('win_rate', 0):.2f}%
+if __name__ == "__main__":
+    print("Testing connection...")
+    send_telegram_message("Hello Naman. The Gold Bot is online.")
 
 Open Positions: {summary_data.get('open_positions', 0)}
 Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
