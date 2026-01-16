@@ -1,4 +1,7 @@
 {
-    "position": null,
+    "position": {
+        "entry_date": "2025-01-06",
+        "entry_price": 77149
+    },
     "equity": 500000.0
 }

@@ -35,9 +35,16 @@ def load_state():
         return {"position": None, "equity": 500000.0}
 
 def save_state(state):
-    """Saves the trading state to the JSON file."""
+    import numpy as np
+    # Helper to convert fancy numpy numbers to normal numbers
+    def convert(o):
+        if isinstance(o, np.integer): return int(o)
+        if isinstance(o, np.floating): return float(o)
+        if isinstance(o, np.ndarray): return o.tolist()
+        raise TypeError(f"Object of type {o.__class__.__name__} is not JSON serializable")
+
     with open(STATE_FILE, 'w') as f:
-        json.dump(state, f, indent=4)
+        json.dump(state, f, indent=4, default=convert)
 
 def log_trade(trade_details):
     """Appends a completed trade to the trades log CSV."""

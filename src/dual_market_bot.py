@@ -1,5 +1,50 @@
 import time
 import logging
+import yfinance as yf
+from datetime import datetime
+import pandas as pd
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+class DualMarketBot:
+    def __init__(self):
+        logging.info("🚀 Dual-Market Gold Bot started!")
+        self.symbol = "GC=F"  # CHANGED: Using Gold Futures instead of XAUUSD=X
+        
+    def get_price(self):
+        try:
+            # Download 1 day of data, 1-minute interval
+            ticker = yf.Ticker(self.symbol)
+            data = ticker.history(period="1d", interval="1m")
+            
+            if data.empty:
+                logging.error(f"No data found for {self.symbol}")
+                return None
+                
+            current_price = data['Close'].iloc[-1]
+            return current_price
+            
+        except Exception as e:
+            logging.error(f"Error fetching price: {e}")
+            return None
+
+    def run(self):
+        logging.info(f"Monitoring {self.symbol}...")
+        
+        while True:
+            price = self.get_price()
+            if price:
+                logging.info(f"📈 Current Gold Price ({self.symbol}): ${price:.2f}")
+            
+            # Wait for 60 seconds before checking again
+            time.sleep(60)
+
+if __name__ == "__main__":
+    bot = DualMarketBot()
+    bot.run()
+import time
+import logging
 from datetime import datetime
 import yfinance as yf
 from broker_manager import BrokerManager
