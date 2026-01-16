@@ -1,18 +1,22 @@
+
 # -*- coding: utf-8 -*-
 import requests
+import os
 
-# --- PASTE YOUR KEYS HERE ---
-BOT_TOKEN = "8553846324:AAFYGH0dqjqimYDsAdKWwnRBYs-GMc-D5pU" 
-CHAT_ID = "8410246010"
+# --- SECURITY: Use environment variables for keys ---
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 def send_telegram_message(message):
     # This function sends a simple text message to your phone
+    if not BOT_TOKEN or not CHAT_ID:
+        print("   ERROR: Telegram BOT_TOKEN or CHAT_ID not set in environment.")
+        return
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     data = {
         "chat_id": CHAT_ID,
         "text": message
     }
-    
     try:
         response = requests.post(url, data=data)
         if response.status_code == 200:
