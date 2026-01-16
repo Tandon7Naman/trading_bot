@@ -1,5 +1,13 @@
 pandas
 numpy
+yfinance
+shimoku-api-python
+tensorflow
+stable-baselines3
+gym
+requests
+pandas
+numpy
 scipy
 scikit-learn
 joblib

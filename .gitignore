@@ -1,37 +1,7 @@
-# Environments
-.env
-.venv
-.idea
-
-# Data files
-*.csv
-*.db
-*.json
-*.h5
-*.pkl
-*.zip
-*.png
-*.html
-*.log
-*.npy
-
-# Directories
 __pycache__/
-pypo_tensorboard/
-models/
-logs/
-raw/
-results/
-reports/
-data/
-deploy/
-terraform/
-
-# Python cache
 *.pyc
-
-# Config files
-config.json
+.venv/
+paper_state_mcx.json
 .env
-*.log
-__pycache__/
+logs/
+models/*.zip
