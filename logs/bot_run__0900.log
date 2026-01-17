@@ -62,3 +62,21 @@ Price       date       close        high         low        open   volume
 [-] Bot failed with exit code 1 at  9:00:25.19 
 ============================================== 
  
+ 
+============================================== 
+Gold Trading Bot Run 
+Started: 17-01-2026  9:00:01.26 
+============================================== 
+ 
+[*] Running bot... 
+Traceback (most recent call last):
+  File "N:\gold-trading-bot\main_bot.py", line 21, in <module>
+    from telegram_alerts import TelegramAlerts
+  File "N:\gold-trading-bot\telegram_alerts.py", line 45
+    <b>\u26a0\ufe0f {error_type} ALERT</b>
+       ^
+SyntaxError: invalid character '\u26a0' (U+26A0)
+ 
+[-] Bot failed with exit code 1 at  9:00:02.63 
+============================================== 
+ 
