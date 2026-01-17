@@ -1,4 +1,7 @@
-import pandas as pd
+# fix_trader.py
+import os
+
+code = r'''import pandas as pd
 import numpy as np
 import os
 import json
@@ -165,3 +168,9 @@ def check_market():
 
 if __name__ == "__main__":
     check_market()
+'''
+
+with open("paper_trading_mcx.py", "w", encoding="utf-8") as f:
+    f.write(code)
+
+print("✅ SUCCESS: paper_trading_mcx.py patched with Self-Repair logic.")

@@ -1,4 +1,5 @@
-# -*- coding: utf-8 -*-
+# This script force-writes a clean telegram_alerts.py
+clean_code = '''# -*- coding: utf-8 -*-
 import requests
 import os
 from dotenv import load_dotenv
@@ -34,3 +35,9 @@ def send_telegram_message(message):
 if __name__ == "__main__":
     print("Testing Secure Connection...")
     send_telegram_message("Security Upgrade Complete! Keys are hidden.")
+'''
+
+with open('telegram_alerts.py', 'w', encoding='utf-8') as f:
+    f.write(clean_code)
+
+print('telegram_alerts.py has been force-cleaned!')

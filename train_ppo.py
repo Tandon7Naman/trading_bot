@@ -1,3 +1,134 @@
+import pandas as pd
+import numpy as np
+import gym
+from gym import spaces
+from stable_baselines3 import PPO
+import os
+
+# --- SETTINGS ---
+DATA_FILE = 'data/MCX_gold_daily.csv'
+MODEL_DIR = "models"
+LOG_DIR = "logs"
+os.makedirs(MODEL_DIR, exist_ok=True)
+os.makedirs(LOG_DIR, exist_ok=True)
+
+# --- INDICATOR CALCULATIONS ---
+def add_indicators(df):
+    """
+    Adds Technical Indicators (RSI, MACD, SMA) to the data.
+    This gives the AI 'X-Ray Vision' into market trends.
+    """
+    df = df.copy()
+    
+    # 1. RSI (Relative Strength Index) - 14 periods
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # 2. MACD (Moving Average Convergence Divergence)
+    exp1 = df['close'].ewm(span=12, adjust=False).mean()
+    exp2 = df['close'].ewm(span=26, adjust=False).mean()
+    df['macd'] = exp1 - exp2
+    df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
+    
+    # 3. SMA (Simple Moving Average) - 50 periods (Trend)
+    df['sma_50'] = df['close'].rolling(window=50).mean()
+    
+    # Drop NaN values created by the calculations
+    df.dropna(inplace=True)
+    return df
+
+# --- CUSTOM TRADING ENVIRONMENT ---
+class GoldTradingEnv(gym.Env):
+    def __init__(self, df):
+        super(GoldTradingEnv, self).__init__()
+        self.df = df
+        self.current_step = 0
+        self.max_steps = len(df) - 1
+        
+        # Action: 0=Hold, 1=Buy, 2=Sell
+        self.action_space = spaces.Discrete(3)
+        
+        # Observation: [Close, RSI, MACD, MACD_Signal, SMA_50]
+        # We normalize values loosely to help the AI learn
+        self.observation_space = spaces.Box(
+            low=-np.inf, high=np.inf, shape=(5,), dtype=np.float32
+        )
+        
+        self.balance = 500000.0
+        self.position = 0.0 # 0=Flat, 1=Long
+        self.entry_price = 0.0
+
+    def reset(self):
+        self.balance = 500000.0
+        self.position = 0.0
+        self.entry_price = 0.0
+        self.current_step = 0
+        return self._next_observation()
+
+    def _next_observation(self):
+        # Return the feature vector for the current step
+        row = self.df.iloc[self.current_step]
+        return np.array([
+            row['close'],
+            row['rsi'],
+            row['macd'],
+            row['macd_signal'],
+            row['sma_50']
+        ], dtype=np.float32)
+
+    def step(self, action):
+        current_price = self.df.iloc[self.current_step]['close']
+        reward = 0
+        done = False
+        
+        # Execute Trade Logic
+        if action == 1: # BUY
+            if self.position == 0:
+                self.position = 1
+                self.entry_price = current_price
+                # Small penalty for transaction cost
+                reward = -50 
+        
+        elif action == 2: # SELL
+            if self.position == 1:
+                self.position = 0
+                pnl = current_price - self.entry_price
+                self.balance += pnl
+                # Reward is the Profit (or Loss)
+                reward = pnl
+        
+        # Step forward
+        self.current_step += 1
+        if self.current_step >= self.max_steps:
+            done = True
+            
+        obs = self._next_observation()
+        return obs, reward, done, {}
+
+# --- MAIN TRAINING LOOP ---
+if __name__ == "__main__":
+    print("🧠 STARTING BRAIN UPGRADE (Training V2)...")
+    
+    # 1. Load and Prepare Data
+    raw_df = pd.read_csv(DATA_FILE)
+    df = add_indicators(raw_df)
+    print(f"   Data Loaded: {len(df)} rows with Indicators (RSI, MACD).")
+    
+    # 2. Initialize Environment
+    env = GoldTradingEnv(df)
+    
+    # 3. Train the Model
+    model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=LOG_DIR)
+    
+    print("   Training in progress... (This might take 30 seconds)")
+    model.learn(total_timesteps=30000)
+    
+    # 4. Save the New Brain
+    model.save(f"{MODEL_DIR}/ppo_gold_agent")
+    print("✅ NEW BRAIN SAVED! The AI now understands RSI & MACD.")
 """
 Training Pipeline for PPO Agent
 FIXED: Monitor wrapper, episode tracking, and real data handling
