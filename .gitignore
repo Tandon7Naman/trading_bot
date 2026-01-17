@@ -1,7 +1,25 @@
+# --- Python Hygiene ---
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+env/
 .venv/
+venv/
+
+# --- Project Specific ---
+# Don't push your local save state (it contains your fake money balance)
 paper_state_mcx.json
+
+# Don't push your personal keys
+telegram_alerts.py
 .env
-logs/
-models/*.zip
+
+# Don't push large raw data if not needed
+data/MCX_gold_raw.csv
+
+# --- IDE Settings ---
+.vscode/
+.idea/
+.ipynb_checkpoints

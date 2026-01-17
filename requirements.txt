@@ -6,6 +6,8 @@ tensorflow
 stable-baselines3
 gym
 requests
+streamlit
+plotly
 pandas
 numpy
 scipy
