@@ -1,0 +1,15 @@
+ 
+============================================== 
+Gold Trading Bot Run 
+Started: 18-01-2026 13:28:04.02 
+============================================== 
+ 
+[*] Running bot... 
+Traceback (most recent call last):
+  File "N:\gold-trading-bot\main_bot.py", line 21, in <module>
+    from telegram_alerts import TelegramAlerts
+ImportError: cannot import name 'TelegramAlerts' from 'telegram_alerts' (N:\gold-trading-bot\telegram_alerts.py)
+ 
+[-] Bot failed with exit code 1 at 13:29:30.37 
+============================================== 
+ 

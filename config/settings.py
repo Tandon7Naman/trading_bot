@@ -1,0 +1,2 @@
+ENABLE_MCX = False
+DEBUG_MODE = True
