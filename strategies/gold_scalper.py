@@ -26,7 +26,7 @@ def add_indicators(df):
     return df
 
 # --- MAIN STRATEGY LOOP ---
-def check_market():
+async def check_market():
     # V3 HEADER
     print(f"\n============================================================")
     print(f"STRATEGY: GOLD SCALPER (V3 - Broker Integrated)")
@@ -72,13 +72,13 @@ def check_market():
     # 4. Order Execution
     if action == 1: # BUY
         if account['position'] == "FLAT":
-            broker.execute_trade(1, current_row['close'], current_row['timestamp'], current_row['rsi'])
+            broker.place_order(1, "MCX", current_row['close'], 10, date=current_row['timestamp'], rsi=current_row['rsi'])
         else:
             print("   (AI says BUY, but Broker reports LONG)")
 
     elif action == 2: # SELL
         if isinstance(account['position'], dict):
-            broker.execute_trade(2, current_row['close'], current_row['timestamp'], current_row['rsi'])
+            broker.place_order(2, "MCX", current_row['close'], 10, date=current_row['timestamp'], rsi=current_row['rsi'])
         else:
             print("   (AI says SELL, but Broker reports FLAT)")
     else:

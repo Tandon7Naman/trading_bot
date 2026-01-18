@@ -1,64 +1,69 @@
+import sys
+import os
+# Fix Path to allow importing from root
+sys.path.append(os.getcwd())
+
 import yfinance as yf
 import pandas as pd
-import numpy as np
 import time
-import os
+from config.settings import ENABLED_MARKETS, ASSET_CONFIG
+from utils.time_utils import is_market_open
 
-# --- PATH CONFIGURATION ---
-CSV_FILE = 'data/MCX_gold_daily.csv'
-GOLD_SYMBOL = 'GC=F'
-
-def update_csv():
-    print(f"\n🔄 Connecting to Global Market ({GOLD_SYMBOL})...")
+def update_asset(market_name):
+    config = ASSET_CONFIG[market_name]
+    symbol = config['symbol']
+    file_path = config['data_file']
     
-    # 1. Ensure 'data' folder exists
-    if not os.path.exists('data'):
-        os.makedirs('data')
+    # 1. CHECK SESSION
+    is_open, reason = is_market_open(symbol)
+    if not is_open:
+        print(f"   💤 {market_name}: Market Closed ({reason})")
+        return
 
-    # 2. Create file if missing
-    if not os.path.exists(CSV_FILE):
-        print("   Creating new data file...")
-        df = pd.DataFrame(columns=['timestamp','open','high','low','close','adj close','volume'])
-        df.to_csv(CSV_FILE, index=False)
+    print(f"   📡 Polling {market_name} ({symbol})...")
     
+    # --- OUTER TRY BLOCK START ---
     try:
-        # 3. Fetch Real Data Only
-        ticker = yf.Ticker(GOLD_SYMBOL)
-        data = ticker.history(period="1d", interval="1m")
+        ticker = yf.Ticker(symbol)
         
-        if data.empty:
-            print("   ⚠️ Market is Closed (No Data Received). Waiting...")
+        # PROTOCOL 7.1: DEFENSIVE API CALL
+        # Inner try/except specifically for connection errors
+        try:
+            data = ticker.history(period="1d", interval="1m")
+        except Exception as api_error:
+            print(f"      ⚠️ API Error for {symbol}: {api_error}")
+            return # Skip this cycle
+
+        # PROTOCOL 7.1: NONE/EMPTY CHECK
+        if data is None or data.empty:
+            print(f"      ⚠️ No data received for {market_name} (NoneType/Empty)")
             return
 
-        # 4. Process Real Data
-        last_price = data['Close'].iloc[-1]
+        # Sanity Check: Ensure 'Close' column exists and has values
+        if 'Close' not in data.columns or pd.isna(data['Close'].iloc[-1]):
+             print(f"      ⚠️ Corrupted data for {market_name} (NaN Price)")
+             return
+
+        if not os.path.exists(file_path):
+            data.to_csv(file_path)
+        else:
+            data.to_csv(file_path)
+            
+        latest_price = data['Close'].iloc[-1]
+        print(f"      ✅ {market_name} Updated: {latest_price:.2f}")
         
-        # Estimate MCX Price (USD -> INR conversion)
-        mcx_price = (last_price * 83 * 0.1)
-        
-        print(f"   🌎 Global: ${last_price:.2f} -> 🇮🇳 MCX (Est): ₹{mcx_price:.2f}")
-        
-        # 5. Save to CSV
-        df = pd.read_csv(CSV_FILE)
-        
-        new_row = {
-            'timestamp': pd.Timestamp.now(),
-            'open': mcx_price, 'high': mcx_price, 
-            'low': mcx_price, 'close': mcx_price,
-            'volume': 0
-        }
-        new_df = pd.DataFrame([new_row])
-        df = pd.concat([df, new_df], ignore_index=True)
-        
-        df.to_csv(CSV_FILE, index=False)
-        print("   ✅ Real Data Saved.")
-        
+    # --- OUTER EXCEPT BLOCK (This was likely missing) ---
     except Exception as e:
-        print(f"   ❌ Data Feed Error: {e}")
+        print(f"      ❌ General Error {market_name}: {e}")
 
 if __name__ == "__main__":
-    print("🚀 LIVE DATA FEED STARTED (Production Mode)")
+    print(f"🚀 DATA FEED STARTED (Protocol 7.1 Robustness)")
+    print(f"📋 Active Subscriptions: {ENABLED_MARKETS}")
+    
     while True:
-        update_csv()
-        print("   zzz Sleeping 60 seconds...")
+        print(f"\n🔄 Syncing Enabled Markets...")
+        for market in ENABLED_MARKETS:
+            update_asset(market)
+            
+        print("   zzz Sleeping 60s...")
         time.sleep(60)
