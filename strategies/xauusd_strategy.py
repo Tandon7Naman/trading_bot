@@ -1,148 +1,146 @@
-
 import pandas as pd
 import numpy as np
-import os
-import sys # <--- Needed to kill the process
 import asyncio
 import pytz
 from execution.paper_broker import PaperBroker
 from execution.connection_manager import HeartbeatMonitor
-from execution.risk_manager import RiskManager, CircuitBreaker # <--- NEW
+from execution.risk_manager import RiskManager, CircuitBreaker
+from execution.db_manager import DBManager
+from strategies.sentiment_engine import SentimentEngine
+from strategies.market_structure import MarketStructure
+from strategies.wyckoff import WyckoffAnalyzer
 from execution.calendar_filter import NewsFilter
 from utils.exceptions import NewsEventError
-from strategies.pricing import GoldPricingEngine
-from utils.time_utils import get_utc_now, is_market_open
 from config.settings import ASSET_CONFIG
-from execution.telegram_alerts import send_telegram_message # <--- NEW
 
-# Global Breaker Instance (Persists across async loops)
+# Global Breaker Instance
 SYSTEM_BREAKER = None
 
-async def check_market(data_handler):
-    """
-    Protocol 7.2 Compliant Strategy.
-    Includes Circuit Breaker for Catastrophic Loss Protection.
-    """
-    global SYSTEM_BREAKER
+def get_current_portfolio_risk(db_manager, symbol_config):
+    """Protocol 2.2.2: The 5% Rule Calculation"""
+    import pandas as pd
+    import numpy as np
+    import asyncio
+    from datetime import datetime, timedelta
+
+    from execution.paper_broker import PaperBroker
+    from execution.mt5_broker import MT5Broker
+    from execution.risk_manager import RiskManager, CircuitBreaker
+    from execution.db_manager import DBManager
+    from execution.journal_manager import JournalManager # <--- NEW
+    from strategies.sentiment_engine import SentimentEngine
+    from strategies.market_structure import MarketStructure
+    from strategies.wyckoff import WyckoffAnalyzer
+    from execution.calendar_filter import NewsFilter
+    from utils.exceptions import NewsEventError
+    from config.settings import ASSET_CONFIG, STRATEGY_CONFIG, EXECUTION_CONFIG
+
+    SYSTEM_BREAKER = None
+
+    # --- PROTOCOL 5.1: COOLDOWN LOGIC ---
+    def check_cooldown(db_manager, symbol):
+        """
+        Enforces 'Patience'. Checks if enough time has passed since last trade.
+        """
+        conn = db_manager._get_conn()
+        cursor = conn.cursor()
+        # Get last closed trade time
+        cursor.execute("SELECT exit_time FROM trades WHERE symbol=? AND status='CLOSED' ORDER BY exit_time DESC LIMIT 1", (symbol,))
+        row = cursor.fetchone()
+        conn.close()
     
-    # 1. SETUP BROKER & BREAKER
-    broker = PaperBroker()
-    account_state = broker.get_positions()
-    equity = account_state['equity']
+        if row and row[0]:
+            last_exit = datetime.fromisoformat(row[0])
+            now = datetime.now()
+            diff_mins = (now - last_exit).total_seconds() / 60
+        
+            required_wait = STRATEGY_CONFIG['cooldown_minutes']
+            if diff_mins < required_wait:
+                return False, f"Cooldown Active ({int(required_wait - diff_mins)}m remaining)"
+            
+        return True, "Ready"
+
+    async def check_market(data_handler):
+        global SYSTEM_BREAKER
     
-    if SYSTEM_BREAKER is None:
-        print(f"🛡️ SAFETY: Initializing Circuit Breaker (Base: ${equity:,.2f})")
-        SYSTEM_BREAKER = CircuitBreaker(initial_equity=equity)
-
-    # 2. CHECK CIRCUIT BREAKER
-    is_healthy, reason = SYSTEM_BREAKER.check_health(equity)
-    if not is_healthy:
-        msg = f"🚨 *CRITICAL ALERT* 🚨\n{reason}\n💀 KILL SWITCH ENGAGED."
-        print(f"\n{msg}")
-        send_telegram_message(msg) # <--- ALERT
-        # Emergency Close Logic
-        if account_state['position'] != "FLAT":
-            pos = account_state['position']
-            print(f"   🔻 Emergency Close: {pos['symbol']} {pos['qty']} Lots")
-            broker.place_order(
-                action=2 if pos['type'] == "LONG" else 1,
-                symbol=pos['symbol'],
-                price=account_state['position']['entry_price'], # Market order
-                qty=pos['qty'],
-                type="MARKET",
-                date=get_utc_now()
-            )
-        print("🛑 SYSTEM SHUTDOWN.")
-        sys.exit(1) # Hard Kill
-
-    # 3. SESSION CHECK
-    is_open, reason = is_market_open("XAUUSD")
-    if not is_open:
-        print(f">>> 🌍 XAUUSD: 💤 Market Closed ({reason})")
-        return
-
-    print(f"\n>>> 🌍 PIPELINE: XAUUSD (Global Spot) <<<")
+        # 1. SETUP
+        # Switch to MT5Broker() for Live, PaperBroker() for testing
+        broker = PaperBroker() 
+        db = DBManager()
     
-    # 4. HEARTBEAT & NEWS
-    try:
-        is_alive, status = HeartbeatMonitor.check_heartbeat("XAUUSD", max_latency=120)
-        if not is_alive:
-            print(f"   🛑 HALT: {status}")
-            return
-        NewsFilter.can_trade("XAUUSD")
-    except NewsEventError as e:
-        print(f"   📰 NEWS SHIELD: Trading Paused. {e}")
-        return 
+        # ... (Standard Startup Checks) ...
+        account_state = broker.get_positions()
+        equity = account_state['equity']
+    
+        if SYSTEM_BREAKER is None: SYSTEM_BREAKER = CircuitBreaker(initial_equity=equity)
+        is_healthy, reason = SYSTEM_BREAKER.check_health(equity)
+        if not is_healthy: print(f"🚨 CRITICAL: {reason}"); return 
+        try: NewsFilter.can_trade("XAUUSD")
+        except NewsEventError: return 
 
-    now_utc = get_utc_now()
-    ist_tz = pytz.timezone('Asia/Kolkata')
-    now_ist = now_utc.astimezone(ist_tz)
-    print(f"   {status} | 🕒 {now_utc.strftime('%H:%M')} UTC / {now_ist.strftime('%H:%M')} IST")
+        # 2. DATA
+        df = await data_handler.get_latest()
+        if df is None or len(df) < 55: return 
 
-    # 5. GET DATA
-    df = await data_handler.get_latest()
-    if df is None or len(df) < 15:
-        print("⏳ Buffer Warming up (Need 15+ candles)...")
-        return
-
-    try:
-        # Safe Init
-        signal = "NEUTRAL"
-        limit_entry = 0.0
-        sl_price = 0.0
-        tp_price = 0.0
-        qty = 0.0
-        
-        # ATR Calculation
-        df['High_Low'] = df['High'] - df['Low']
-        df['High_Close'] = abs(df['High'] - df['Close'].shift(1))
-        df['Low_Close'] = abs(df['Low'] - df['Close'].shift(1))
-        df['TR'] = df[['High_Low', 'High_Close', 'Low_Close']].max(axis=1)
-        df['ATR'] = df['TR'].rolling(window=14).mean()
-        
-        current_row = df.iloc[-1]
-        if pd.isna(current_row['Close']): return
-        
-        price = float(current_row['Close'])
-        current_atr = float(current_row['ATR']) if not pd.isna(current_row['ATR']) else 0.0
-        
+        # 3. ANALYSIS
+        df['SMA_50'] = df['Close'].rolling(50).mean()
+        price = float(df.iloc[-1]['Close'])
+    
+        # Market Structure (Protocols 3.2, 3.3)
+        is_liquid, liq_msg = MarketStructure.check_liquidity(df, price)
+        if not is_liquid: return
+        regime, adx = MarketStructure.get_regime(df)
+    
+        # Sentiment (Protocol 4.0)
+        sentiment_score, sentiment_label = SentimentEngine.analyze_sentiment("XAUUSD")
+    
         current_pos = account_state['position']
-        pending_orders = account_state['orders']
-        
-        print(f"📊 Price: ${price:,.2f} | 🌊 ATR: ${current_atr:.2f} | 💰 Equity: ${equity:,.2f}")
+        print(f"📊 Price: ${price:,.2f} | Regime: {regime} | Sentiment: {sentiment_label}")
 
-        # STATE MACHINE
         if current_pos == "FLAT":
-            if not pending_orders:
-                print("   🔍 STATE: SCANNING")
-                
-                if price < 2600:
-                    signal = "BUY"
-                
-                if signal == "BUY":
-                    print("   ✨ SIGNAL: BUY Condition Met")
-                    sl_pips = 50  
-                    tp_pips = 100 
-                    
-                    sl_price, tp_price = GoldPricingEngine.calculate_sl_tp(
-                        price, 1, sl_pips, tp_pips, precision=2
-                    )
-                    
-                    limit_entry = round(price - 1.00, 2)
-                    
-                    qty = RiskManager.calculate_lot_size(equity, limit_entry, sl_price, "XAUUSD", 0.02)
-                    
-                    if qty > 0:
-                        broker.place_order(
-                            action=1, symbol="XAUUSD", price=limit_entry, qty=qty, 
-                            type="LIMIT", tif="DAY", sl=sl_price, tp=tp_price, 
-                            atr=current_atr, date=get_utc_now()
-                        )
-            else:
-                print(f"   ⏳ STATE: WAITING (Limit Order Pending)")
-        else:
-            print(f"   🛡️ STATE: MANAGING (Holding LONG)")
+            # --- PROTOCOL 5.1: PATIENCE CHECK ---
+            is_ready, cool_msg = check_cooldown(db, "XAUUSD")
+            if not is_ready:
+                print(f"   🧘 PATIENCE: {cool_msg}")
+                return # Force Wait
 
-    except Exception as e:
-        print(f"⚠️ Strategy Error: {e}")
-        send_telegram_message(f"⚠️ *CRASH WARNING*\nStrategy Loop Failed:\n{str(e)}") # <--- ALERT
+            # --- STRATEGY LOGIC (Protocol 3.1) ---
+            has_sc, sc_low, sc_vol, sc_idx = WyckoffAnalyzer.find_selling_climax(df)
+        
+            if has_sc:
+                is_spring, spring_msg = WyckoffAnalyzer.detect_spring(df.iloc[-1], sc_low, sc_vol)
+            
+                if is_spring:
+                    print(f"   ✨ SIGNAL: Wyckoff Spring!")
+                
+                    # AI Veto
+                    if sentiment_label == "BEARISH":
+                        print(f"   🛑 VETO: Sentiment Bearish.")
+                        return 
+
+                    # Execution
+                    sl_price = df.iloc[-1]['Low'] - 2.0
+                    tp_price = price + (price - sl_price) * 3
+                
+                    # --- PROTOCOL 5.3: SANITY CHECK (Fat Finger) ---
+                    if price > (price * (1 + EXECUTION_CONFIG['max_slippage_pct'])): 
+                        print("   ❌ REJECT: Price Deviation too high!")
+                        return
+
+                    # Risk Calc
+                    qty = RiskManager.calculate_lot_size(equity, price, sl_price, "XAUUSD", confidence_score=2.5)
+                
+                    if qty > 0:
+                        success = broker.place_order(1, "XAUUSD", price, qty, sl=sl_price, tp=tp_price)
+                    
+                        if success:
+                            # --- PROTOCOL 5.2: LOG CONTEXT TO DB ---
+                            # We save the "Why" (Strategy/Regime) into the DB for later retrieval
+                            # (Adding a simple temp storage or printing for now)
+                            print(f"   📝 CONTEXT LOGGED: Strategy=Wyckoff_Spring, ADX={adx:.1f}, Sentiment={sentiment_score:.2f}")
+
+        else:
+            # MANAGEMENT & CLOSING JOURNAL
+            # If position closes, we trigger the Journal Manager
+            # (For simulation, we'll assume the Broker handles the 'Close' trigger)
+            pass

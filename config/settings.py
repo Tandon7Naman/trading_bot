@@ -1,3 +1,22 @@
+# --- PROTOCOL 5.1: PATIENCE (COOLDOWN) ---
+STRATEGY_CONFIG = {
+    "cooldown_minutes": 240, # 4 Hours forced wait after a trade closes
+}
+
+# --- PROTOCOL 5.2: JOURNALING ---
+JOURNAL_CONFIG = {
+    "enabled": True,
+    "type": "CSV", # Options: "CSV" or "GSHEET"
+    # If using Google Sheets:
+    "spreadsheet_name": "Gold_Bot_Journal_2026",
+    "json_keyfile": "service_account.json" # Path to Google Cloud Credentials
+}
+
+# --- PROTOCOL 5.3: FAT FINGER SAFETY ---
+EXECUTION_CONFIG = {
+    "max_slippage_pct": 0.05, # Reject if price deviates > 5%
+    "max_notional_value": 500_000 # Max $500k per order
+}
 import os
 from datetime import time
 
@@ -65,9 +84,19 @@ ASSET_CONFIG = {
     }
 }
 
+
 # --- PROTOCOL 7.3: TELEMETRY ---
 TELEGRAM_CONFIG = {
     "enabled": True,
     "bot_token": "YOUR_BOT_TOKEN_HERE", 
     "chat_id": "YOUR_CHAT_ID_HERE"      
+}
+
+# --- PROTOCOL 4.1: NEWS & AI CONFIG ---
+NEWS_CONFIG = {
+    "enabled": True,
+    "api_key": "ee4c539decb34898b99ae395a8f6327b", # Get from newsapi.org
+    "sources": "bloomberg,reuters,cnbc,financial-times,crypto-coins-news",
+    "cache_seconds": 3600, # Only fetch news once per hour (Save API calls)
+    "sentiment_threshold": 0.5 # Confidence required to trigger a Veto
 }

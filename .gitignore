@@ -1,29 +1,34 @@
-# --- Python Hygiene ---
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
 env/
-.venv/
-venv/
 
+# --- SECTION 6: IGNORED ARTIFACTS ---
 
-
-
-# --- Secrets (NEVER SHARE) ---
-.env
-config.json
-data/paper_state_mcx.json
-
-# --- Environment & Heavy Files ---
-.venv/
+# 1. Python Compile Cache
 __pycache__/
 *.pyc
 
-# --- Local Data (Don't upload 1GB of CSVs) ---
-data/*.csv
+# 2. Virtual Environments (NEVER Commit these)
+venv/
+.venv/
+env/
 
-# --- System Junk ---
+# 3. Environment & Secrets (SECURITY CRITICAL)
+.env
+config/secrets.py
+
+# 4. Local Data & Databases
+# We keep the folder, but ignore the actual data files
+data/*.csv
+data/*.db
+data/*.json
+
+# 5. Logs
+*.log
+logs/
+
+# 6. IDE Settings
+.vscode/
+.idea/
+
+# 7. OS Metadata
 .DS_Store
 Thumbs.db

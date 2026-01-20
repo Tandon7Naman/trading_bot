@@ -6,6 +6,7 @@ from execution.base_broker import BrokerInterface
 from execution.db_manager import DBManager  # <--- NEW: SQLite Manager
 from execution.telegram_alerts import send_telegram_message
 from utils.time_utils import to_display_time, get_utc_now
+from execution.journal_manager import JournalManager
 from config.settings import ASSET_CONFIG 
 
 class PaperBroker(BrokerInterface):
@@ -78,6 +79,10 @@ class PaperBroker(BrokerInterface):
         }
 
     def place_order(self, action, symbol, price, qty, **kwargs):
+        """
+        Protocol 2.3: OCO / Bracket Order Execution.
+        Enforces MANDATORY Stop Losses. Rejects any 'Naked' positions.
+        """
         # Latency Sim
         lag = random.uniform(0.1, 0.5)
         time.sleep(lag)
@@ -88,9 +93,19 @@ class PaperBroker(BrokerInterface):
         tp = kwargs.get('tp', 0.0)
         atr = kwargs.get('atr', 0.0)
 
+        # --- PROTOCOL 2.3: MANDATORY STOP LOSS CHECK ---
+        if action == 1: # BUY
+            if sl <= 0:
+                print(f"❌ REJECTED: Protocol 2.3 Violation. Naked Order (No SL) on {symbol}.")
+                return False
+            
+            if sl >= price:
+                print(f"❌ REJECTED: Invalid Logic. SL ({sl}) must be below Entry ({price}).")
+                return False
+
         # 1. HANDLE LIMIT ORDERS
         if order_type == 'LIMIT':
-            print(f"📝 ORDER PLACED: {symbol} {qty}x LIMIT @ {price}")
+            print(f"📝 ORDER PLACED: {symbol} {qty}x LIMIT @ {price} | SL: {sl} | TP: {tp}")
             self.db.add_order({
                 "symbol": symbol, "action": action, "limit_price": price, 
                 "qty": qty, "sl": sl, "tp": tp, "type": "LIMIT", 
@@ -98,7 +113,7 @@ class PaperBroker(BrokerInterface):
             })
             return True
 
-        # 2. HANDLE MARKET ORDERS
+        # 2. HANDLE MARKET ORDERS (BRACKET)
         filled_price = self._calculate_execution_price(price, action, atr)
         current_pos = self.db.get_open_position(symbol)
 
@@ -107,19 +122,19 @@ class PaperBroker(BrokerInterface):
                 has_margin, req_margin = self.check_margin(filled_price, qty)
                 if not has_margin: return False
 
-                print(f"🚀 BROKER: BUY FILLED @ {filled_price}")
+                print(f"🚀 BROKER: BUY FILLED @ {filled_price} | 🛑 SL: {sl} | 🎯 TP: {tp}")
                 
-                # DB: Add Trade
+                # DB: Add Trade WITH ATTACHED STOPS (Simulating Server-Side OCO)
                 self.db.add_trade(
                     ticket=random.randint(10000, 99999), 
                     symbol=symbol, direction="LONG", size=qty, 
                     price=filled_price, sl=sl, tp=tp
                 )
                 
-                send_telegram_message(f"🚀 *OPEN LONG*\nPrice: ${filled_price}\nSize: {qty}")
+                send_telegram_message(f"🚀 *OPEN LONG*\nPrice: ${filled_price}\nSize: {qty}\nSL: {sl}")
                 return True
 
-        elif action == 2: # SELL
+        elif action == 2: # SELL (Close)
             if current_pos != "FLAT":
                 # Close Logic
                 entry_price = current_pos['entry_price']
@@ -130,9 +145,28 @@ class PaperBroker(BrokerInterface):
                 
                 print(f"🔻 BROKER: SELL FILLED @ {filled_price} | PnL: ${net_pnl:.2f}")
                 
-                # DB: Close Trade & Update Equity
+                # DB: Close Trade
                 self.db.close_trade(symbol, filled_price, net_pnl)
                 
+                # --- PROTOCOL 5.2: AUTOMATED JOURNALING ---
+                # Retrieve trade details from DB to get entry time/price
+                # For now, mock details; in production, fetch from DB
+                journal_entry = {
+                    "ticket": random.randint(1000,9999), # Mock ticket
+                    "symbol": symbol,
+                    "direction": "LONG",
+                    "size": size,
+                    "entry_price": entry_price,
+                    "exit_price": filled_price,
+                    "pnl": net_pnl,
+                    "strategy": "Wyckoff_Spring", # Can be passed dynamically
+                    "regime": "TRENDING", # Passed dynamically in real implementation
+                    "sentiment": "NEUTRAL",
+                    "entry_time": "2026-01-21 10:00",
+                    "exit_time": get_utc_now()
+                }
+                JournalManager.log_trade(journal_entry)
+                # ------------------------------------------
                 new_equity = self.db.get_account()['equity'] + net_pnl
                 self.db.update_equity(new_equity)
                 

@@ -1,69 +1,82 @@
-import sys
-import os
-# Fix Path to allow importing from root
-sys.path.append(os.getcwd())
-
 import yfinance as yf
 import pandas as pd
 import time
-from config.settings import ENABLED_MARKETS, ASSET_CONFIG
-from utils.time_utils import is_market_open
+import os
+import sys
 
-def update_asset(market_name):
-    config = ASSET_CONFIG[market_name]
-    symbol = config['symbol']
-    file_path = config['data_file']
-    
-    # 1. CHECK SESSION
-    is_open, reason = is_market_open(symbol)
-    if not is_open:
-        print(f"   💤 {market_name}: Market Closed ({reason})")
+# Add project root to path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from config.settings import ASSET_CONFIG, ENABLED_MARKETS
+
+def update_asset(asset_name):
+    """
+    Protocol 9.0 Compliant Data Fetcher.
+    Includes Type-Safety fix for yfinance Series objects.
+    """
+    config = ASSET_CONFIG.get(asset_name)
+    if not config:
+        print(f"⚠️ Config missing for {asset_name}")
         return
 
-    print(f"   📡 Polling {market_name} ({symbol})...")
+    # 1. GET CONFIG VALUES
+    ticker_symbol = config['data_symbol']
+    csv_path = config['data_file']
     
-    # --- OUTER TRY BLOCK START ---
-    try:
-        ticker = yf.Ticker(symbol)
-        
-        # PROTOCOL 7.1: DEFENSIVE API CALL
-        # Inner try/except specifically for connection errors
-        try:
-            data = ticker.history(period="1d", interval="1m")
-        except Exception as api_error:
-            print(f"      ⚠️ API Error for {symbol}: {api_error}")
-            return # Skip this cycle
+    print(f"   ⬇️  Fetching {asset_name} ({ticker_symbol})...")
 
-        # PROTOCOL 7.1: NONE/EMPTY CHECK
-        if data is None or data.empty:
-            print(f"      ⚠️ No data received for {market_name} (NoneType/Empty)")
+    try:
+        # 2. DOWNLOAD DATA
+        df = yf.download(ticker_symbol, period="5d", interval="1m", progress=False)
+
+        if df.empty:
+            print(f"   ⚠️  Warning: No data returned for {ticker_symbol}")
             return
 
-        # Sanity Check: Ensure 'Close' column exists and has values
-        if 'Close' not in data.columns or pd.isna(data['Close'].iloc[-1]):
-             print(f"      ⚠️ Corrupted data for {market_name} (NaN Price)")
-             return
-
-        if not os.path.exists(file_path):
-            data.to_csv(file_path)
-        else:
-            data.to_csv(file_path)
-            
-        latest_price = data['Close'].iloc[-1]
-        print(f"      ✅ {market_name} Updated: {latest_price:.2f}")
+        # 3. FORMAT DATA
+        df.reset_index(inplace=True)
         
-    # --- OUTER EXCEPT BLOCK (This was likely missing) ---
+        # Standardize Columns
+        required_cols = ['Datetime', 'Open', 'High', 'Low', 'Close', 'Volume']
+        if 'Date' in df.columns:
+            df.rename(columns={'Date': 'Datetime'}, inplace=True)
+            
+        # Ensure we only keep relevant columns
+        # (Handling multi-level columns if yfinance returns them)
+        try:
+            df.columns = df.columns.droplevel(1) # Flatten if MultiIndex
+        except:
+            pass
+
+        # Filter columns if they exist, otherwise keep what we have
+        available_cols = [c for c in required_cols if c in df.columns]
+        df = df[available_cols]
+
+        # 4. SAVE TO CSV
+        os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+        df.to_csv(csv_path, index=False)
+        
+        # 5. VALIDATION (The Fix: Force to float)
+        if not df.empty:
+            latest_time = df.iloc[-1]['Datetime']
+            # Cast strictly to float to avoid "Series.__format__" error
+            raw_price = df.iloc[-1]['Close']
+            latest_price = float(raw_price) if pd.notna(raw_price) else 0.0
+            
+            print(f"   ✅ Saved {len(df)} rows. Last: {latest_time} @ ${latest_price:.2f}")
+
     except Exception as e:
-        print(f"      ❌ General Error {market_name}: {e}")
+        print(f"   ❌ Error updating {asset_name}: {e}")
 
 if __name__ == "__main__":
-    print(f"🚀 DATA FEED STARTED (Protocol 7.1 Robustness)")
-    print(f"📋 Active Subscriptions: {ENABLED_MARKETS}")
-    
+    print("\n🚀 DATA FEED STARTED (Protocol 9.0 Compliant)")
+    print(f"📋 Active Subscriptions: {ENABLED_MARKETS}\n")
+
     while True:
-        print(f"\n🔄 Syncing Enabled Markets...")
+        print(f"🔄 Syncing Enabled Markets...")
+        
         for market in ENABLED_MARKETS:
             update_asset(market)
-            
-        print("   zzz Sleeping 60s...")
+        
+        print("💤 Waiting 60s...")
         time.sleep(60)

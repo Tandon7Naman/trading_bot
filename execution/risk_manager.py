@@ -3,58 +3,100 @@ from config.settings import ASSET_CONFIG
 
 class RiskManager:
     """
-    Protocol 4.3 & 9.0: Margin Validation & Key Sync.
-    Uses 'min_vol', 'max_vol' from the new config structure.
+    Protocol 2.2: The 3-5-7 Risk Framework.
+    - 3% Max Risk per Trade (Hard Cap)
+    - 5% Max Portfolio Risk (Correlation Shield)
+    - 7% Profit Logic (R:R > 1:2.3)
     """
     
-    @staticmethod
-    def calculate_lot_size(equity, entry_price, sl_price, symbol="XAUUSD", risk_pct=0.01):
-        config = ASSET_CONFIG.get(symbol)
-        if not config:
-            print(f"   ⚠️ Risk Manager: Unknown config for {symbol}")
-            return 0.01
+    # CONSTANTS (Protocol 2.2)
+    MAX_TRADE_RISK_PCT = 0.03       # 3% Hard Cap
+    MAX_PORTFOLIO_RISK_PCT = 0.05   # 5% Portfolio Cap
+    MIN_RISK_REWARD_RATIO = 2.3     # The "7% Rule" translated to Expectancy
 
-        # 1. RISK BASED SIZING
-        risk_amount = equity * risk_pct
-        price_distance = abs(entry_price - sl_price)
+    @staticmethod
+    def validate_setup(entry_price, sl_price, tp_price):
+        """
+        Protocol 2.2.3: The 7% Profit Target (Expectancy Check).
+        Rejects trades with poor Risk:Reward ratios.
+        """
+        risk = abs(entry_price - sl_price)
+        reward = abs(tp_price - entry_price)
         
-        if price_distance < config['tick_size']:
-            print("   ⚠️ Risk Manager: SL too close to Entry!")
+        if risk == 0: return False, "Zero Risk (Invalid SL)"
+        
+        rr_ratio = reward / risk
+        
+        if rr_ratio < RiskManager.MIN_RISK_REWARD_RATIO:
+            return False, f"Low R:R ({rr_ratio:.2f} < {RiskManager.MIN_RISK_REWARD_RATIO})"
+            
+        return True, f"Valid R:R ({rr_ratio:.2f})"
+
+    @staticmethod
+    def calculate_lot_size(equity, entry_price, sl_price, symbol="XAUUSD", 
+                           confidence_score=1.0, current_portfolio_risk_usd=0.0):
+        """
+        Calculates position size respecting the 3% and 5% rules.
+        Args:
+            confidence_score: 1.0 = Normal (1%), 2.0 = High (2%), 3.0 = Max (3%)
+            current_portfolio_risk_usd: The $ amount currently at risk in other trades.
+        """
+        config = ASSET_CONFIG.get(symbol)
+        if not config: return 0.0
+
+        # --- 1. DETERMINE RISK % (The 3% Rule) ---
+        # Base risk is 1%, scaled by confidence, capped at 3%
+        base_risk_pct = 0.01 
+        target_risk_pct = min(base_risk_pct * confidence_score, RiskManager.MAX_TRADE_RISK_PCT)
+        
+        risk_amount_usd = equity * target_risk_pct
+
+        # --- 2. CHECK PORTFOLIO CAP (The 5% Rule) ---
+        max_portfolio_risk_usd = equity * RiskManager.MAX_PORTFOLIO_RISK_PCT
+        available_risk_budget = max_portfolio_risk_usd - current_portfolio_risk_usd
+        
+        if available_risk_budget <= 0:
+            print(f"   🛡️ 5% RULE: Portfolio Full! (Risk Locked: ${current_portfolio_risk_usd:.2f})")
             return 0.0
             
-        loss_per_lot = price_distance * config['contract_size']
-        risk_lots = risk_amount / loss_per_lot
+        # Clamp our trade risk to whatever budget is left
+        final_risk_usd = min(risk_amount_usd, available_risk_budget)
         
-        # 2. MARGIN BASED SIZING
+        if final_risk_usd < (equity * 0.001): # Ignore microscopic trades
+            return 0.0
+
+        # --- 3. CALCULATE VOLUME ---
+        price_distance = abs(entry_price - sl_price)
+        if price_distance < config['tick_size']: return 0.0
+        
+        loss_per_lot = price_distance * config['contract_size']
+        if loss_per_lot == 0: return 0.0
+        
+        raw_lots = final_risk_usd / loss_per_lot
+
+        # --- 4. MARGIN & PHYSICS CHECKS (Protocol 4.3/9.0) ---
+        # (Reusing previous logic for Margin Cap)
         leverage = config.get('leverage', 100.0)
         contract_size = config['contract_size']
         usable_equity = equity * 0.95
+        margin_max_lots = usable_equity / (entry_price * contract_size / leverage)
         
-        notional_value_per_lot = entry_price * contract_size
-        margin_per_lot = notional_value_per_lot / leverage
-        margin_max_lots = usable_equity / margin_per_lot
+        final_lots = min(raw_lots, margin_max_lots)
         
-        # 3. LOGIC SELECTION
-        raw_lots = min(risk_lots, margin_max_lots)
-        
-        # 4. NORMALIZE (Using Protocol 9.0 Keys: vol_step, min_vol, max_vol)
+        # Normalize
         step = config.get('vol_step', 0.01)
-        lots = math.floor(raw_lots / step) * step
+        lots = math.floor(final_lots / step) * step
         
         min_vol = config.get('min_vol', 0.01)
         max_vol = config.get('max_vol', 10.0)
-        
         lots = max(min_vol, min(max_vol, lots))
-        
-        constraint = "RISK" if risk_lots < margin_max_lots else "MARGIN"
-        print(f"   ⚖️  SIZE CALC ({constraint}): Risk {risk_lots:.2f} | Margin Cap {margin_max_lots:.2f} -> Final {lots} Lots")
+
+        print(f"   ⚖️  3-5-7 CALC: Risk ${final_risk_usd:.2f} ({target_risk_pct*100:.1f}%) | Portfolio Risk: ${current_portfolio_risk_usd:.2f} -> Size {lots}")
         return round(lots, 2)
 
 
 class CircuitBreaker:
-    """
-    Protocol 7.2: Global Kill Switch.
-    """
+    """ Protocol 7.2: Global Kill Switch (Unchanged) """
     def __init__(self, initial_equity, daily_loss_limit=0.02, max_drawdown_limit=0.05):
         self.starting_equity = initial_equity
         self.high_water_mark = initial_equity
