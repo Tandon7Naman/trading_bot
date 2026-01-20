@@ -1,34 +1,73 @@
-
-
 import os
-from dotenv import load_dotenv
+from datetime import time
 
-load_dotenv()
+# Base Directory
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# --- SYSTEM SETTINGS ---
-TRADING_MODE = os.getenv("TRADING_MODE", "PAPER")
+# Enabled Markets
+ENABLED_MARKETS = ["XAUUSD"] 
 
-# --- FEATURE FLAGS (The Master Switch) ---
-# Add "MCX" to this list to enable the Indian Pipeline.
-# Add "XAUUSD" to this list to enable the Global Spot Pipeline.
-# Current State: XAUUSD is ACTIVE, MCX is DORMANT.
-ENABLED_MARKETS = [
-	"XAUUSD"  
-	# "MCX"   <-- Commented out (Dormant Pipeline)
-]
-
-# --- ASSET CONFIGURATION ---
+# --- PROTOCOL 9.0: ASSET SPECIFICATIONS ---
 ASSET_CONFIG = {
-	"MCX": {
-		"symbol": "GC=F",          # Uses Global Gold to estimate MCX
-		"data_file": "data/MCX_gold_daily.csv",
-		"strategy": "strategies.gold_scalper",
-		"qty": 10
-	},
-	"XAUUSD": {
-		"symbol": "GC=F",          # Back to Gold Futures
-		"data_file": "data/XAUUSD_1m.csv",
-		"strategy": "strategies.xauusd_strategy",
-		"qty": 0.1
-	}
+    # --- GLOBAL SPOT GOLD (XAUUSD) ---
+    "XAUUSD": {
+        "symbol_root": "XAUUSD",   
+        "data_symbol": "GC=F",     
+        "data_file": os.path.join(BASE_DIR, "data", "XAUUSD_1m.csv"),
+        
+        "schedule": {
+            "timezone": "UTC",
+            "open_time": "00:00",
+            "close_time": "23:00"
+        },
+
+        # Physics & Valuation
+        "type": "SPOT",
+        "contract_size": 100,       
+        "leverage": 100.0,          
+        "tick_size": 0.01,          
+        "tick_value_usd": 1.00,     
+        "spread": 0.20,             
+        
+        # Volume Constraints (RENAMED in Protocol 9.0)
+        "min_vol": 0.01,            
+        "max_vol": 10.0,
+        "vol_step": 0.01,
+        
+        # Risk Buffers
+        "margin_buffer": 1.5,       
+    },
+
+    # --- MCX GOLD FUTURES (INDIA) ---
+    "MCX_GOLD": {
+        "symbol_root": "GOLD",     
+        "data_symbol": "GOLDM",    
+        "data_file": os.path.join(BASE_DIR, "data", "MCX_GOLD_1m.csv"),
+        
+        "schedule": {
+            "timezone": "Asia/Kolkata",
+            "open_time": "09:00",
+            "close_time": "23:30"
+        },
+
+        "type": "FUTURES",
+        "contract_size": 100,       
+        "leverage": 1.0,            
+        "tick_size": 1.00,          
+        "tick_value_inr": 100.0,    
+        "spread": 5.0,              
+        
+        "min_vol": 1.0,             
+        "max_vol": 50.0,
+        "vol_step": 1.0,
+        
+        "margin_buffer": 2.0,       
+    }
+}
+
+# --- PROTOCOL 7.3: TELEMETRY ---
+TELEGRAM_CONFIG = {
+    "enabled": True,
+    "bot_token": "YOUR_BOT_TOKEN_HERE", 
+    "chat_id": "YOUR_CHAT_ID_HERE"      
 }

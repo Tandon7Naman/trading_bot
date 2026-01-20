@@ -1,236 +1,177 @@
-import json
-import os
 import random
+import time
 import numpy as np
 from datetime import datetime
-from execution.base_broker import GenericBroker
+from execution.base_broker import BrokerInterface
+from execution.db_manager import DBManager  # <--- NEW: SQLite Manager
+from execution.telegram_alerts import send_telegram_message
 from utils.time_utils import to_display_time, get_utc_now
+from config.settings import ASSET_CONFIG 
 
-# --- TELEGRAM ALERTS ---
-try:
-    from execution.telegram_alerts import send_telegram_message
-except ImportError:
-    send_telegram_message = lambda x: None
-
-class PaperBroker(GenericBroker):
-    def __init__(self, state_file='data/paper_state_mcx.json', initial_capital=500000.0):
-        self.state_file = state_file
-        self.initial_capital = initial_capital
+class PaperBroker(BrokerInterface):
+    """
+    Protocol 9.2: SQLite-Backed Paper Broker.
+    Replaces JSON state with ACID-compliant Database transactions.
+    """
+    def __init__(self, initial_capital=500000.0):
+        # 1. Initialize DB
+        self.db = DBManager()
         
-        # Physics
-        self.leverage = 100.0
-        self.contract_size = 100
+        # 2. Sync Equity if fresh start
+        account = self.db.get_account()
+        self.equity = account['equity']
+        
+        # 3. Physics (From Config)
+        config = ASSET_CONFIG.get("XAUUSD", {})
+        self.leverage = config.get('leverage', 100.0) 
+        self.contract_size = config.get('contract_size', 100)
+        self.spread = config.get('spread', 0.20) 
         self.commission_per_lot = 7.00 
         self.swap_per_lot_nightly = -5.00 
+
+    def _calculate_execution_price(self, price, action, atr=0.0):
+        # (Same logic as Protocol 5.2 - Slippage/Spread)
+        volatility_penalty = atr * random.uniform(0.01, 0.05) if atr > 0 else random.uniform(0.01, 0.15)
+        latency_drift = random.uniform(-0.02, 0.05) if action == 1 else random.uniform(-0.05, 0.02)
+        if latency_drift < 0: latency_drift = 0
         
-        self.state = self._load_state()
+        total_slippage = volatility_penalty + latency_drift
+        final_price = price
+        
+        if action == 1: # BUY
+            final_price = price + self.spread + total_slippage
+            print(f"      📉 EXECUTION: Spread ${self.spread:.2f} + Slip ${total_slippage:.2f}")
+        elif action == 2: # SELL
+            final_price = price - total_slippage
+            print(f"      📉 EXECUTION: Slip ${total_slippage:.2f}")
 
-    # --- HELPER METHODS ---
-    def _convert(self, o):
-        if isinstance(o, np.int64): return int(o)
-        if isinstance(o, np.float32): return float(o)
-        if isinstance(o, datetime): return o.isoformat()
-        return o
-
-    def _load_state(self):
-        if os.path.exists(self.state_file):
-            try:
-                with open(self.state_file, 'r') as f:
-                    state = json.load(f)
-                    if 'history' not in state: state['history'] = []
-                    # Protocol 6.2: Add Pending Orders storage
-                    if 'pending_orders' not in state: state['pending_orders'] = []
-                    return state
-            except Exception:
-                pass
-        return {
-            "equity": self.initial_capital, 
-            "position": "FLAT", 
-            "history": [], 
-            "pending_orders": []
-        }
-
-    def _save_state(self):
-        try:
-            with open(self.state_file, 'w') as f:
-                json.dump(self.state, f, indent=4, default=self._convert)
-        except Exception as e:
-            print(f"❌ Error saving state: {e}")
-
-    def _apply_friction(self, price, action, symbol):
-        spread = 0.20 if 'GC=F' in symbol or 'XAU' in symbol else 0.05
-        slippage = random.uniform(0.01, 0.15)
-        friction = (spread / 2) + slippage
-        if action == 1: return round(price + friction, 2)
-        elif action == 2: return round(price - friction, 2)
-        return price
+        return round(final_price, 2)
 
     def check_margin(self, price, qty):
         notional_value = price * self.contract_size * qty
         required_margin = notional_value / self.leverage
-        free_equity = self.state['equity']
-        if free_equity < required_margin:
+        # Read latest equity from DB
+        current_equity = self.db.get_account()['equity']
+        if current_equity < required_margin:
             return False, required_margin
         return True, required_margin
 
-    def calculate_swap(self, entry_time_str, qty):
-        try:
-            entry_dt = datetime.fromisoformat(entry_time_str)
-            now_dt = get_utc_now()
-            nights = (now_dt - entry_dt).days
-            if nights < 0: nights = 0
-            return nights * self.swap_per_lot_nightly * qty
-        except:
-            return 0.0
-
-    # --- PROTOCOL 6.2: LIMIT ORDER PROCESSING ---
-    def check_limits(self, current_price, symbol):
-        """
-        Checks if any pending LIMIT orders should be filled at the current price.
-        """
-        pending = self.state.get('pending_orders', [])
-        if not pending:
-            return
-
-        # List to keep orders that are NOT filled yet
-        remaining_orders = []
-        
-        for order in pending:
-            # Only check orders for this symbol
-            if order['symbol'] != symbol:
-                remaining_orders.append(order)
-                continue
-
-            limit_price = order['limit_price']
-            action = order['action']
-            qty = order['qty']
-            
-            # CHECK: Did price hit the limit?
-            triggered = False
-            if action == 1: # BUY LIMIT
-                # Buy if price dropped to or below limit
-                if current_price <= limit_price:
-                    triggered = True
-            elif action == 2: # SELL LIMIT
-                # Sell if price rose to or above limit
-                if current_price >= limit_price:
-                    triggered = True
-            
-            if triggered:
-                print(f"⚡ LIMIT TRIGGERED: {order['type']} @ {limit_price} (Price: {current_price})")
-                # Execute as a MARKET order now that it's triggered
-                # We recurse back into place_order but as 'MARKET' to reuse logic
-                self.place_order(
-                    action=action, 
-                    symbol=symbol, 
-                    price=current_price, # Fill at market price (or limit if better)
-                    qty=qty,
-                    type='MARKET', # Convert to Market fill
-                    sl=order['sl'],
-                    tp=order['tp'],
-                    date=get_utc_now()
-                )
-                # Do NOT add to remaining_orders (it's gone)
-            else:
-                remaining_orders.append(order)
-
-        # Update state if changed
-        if len(remaining_orders) != len(pending):
-            self.state['pending_orders'] = remaining_orders
-            self._save_state()
-
-    # --- IMPLEMENTING THE CONTRACT ---
+    # --- INTERFACE IMPLEMENTATION ---
+    
     def connect(self):
-        print("✅ Shadow Broker: Connected to Local Database.")
+        print("✅ Paper Broker: Connected to SQLite Database.")
         return True
 
     def get_tick(self, symbol):
         return 0.0 
 
     def get_positions(self):
+        # Read Live State from DB
+        account = self.db.get_account()
+        pos = self.db.get_open_position("XAUUSD") # Currently supporting single asset logic
+        orders = self.db.get_orders("XAUUSD")
+        
         return {
-            "equity": self.state.get('equity', self.initial_capital),
-            "position": self.state.get('position', 'FLAT'),
-            "orders": self.state.get('pending_orders', [])
+            "equity": account['equity'],
+            "position": pos,
+            "orders": orders
         }
 
     def place_order(self, action, symbol, price, qty, **kwargs):
-        order_type = kwargs.get('type', 'MARKET') # MARKET or LIMIT
-        tif = kwargs.get('tif', 'DAY') # DAY or GTC
+        # Latency Sim
+        lag = random.uniform(0.1, 0.5)
+        time.sleep(lag)
         
-        position = self.state['position']
+        order_type = kwargs.get('type', 'MARKET')
         date_utc = kwargs.get('date', 'Unknown')
         sl = kwargs.get('sl', 0.0)
         tp = kwargs.get('tp', 0.0)
-        date_str = to_display_time(date_utc)
+        atr = kwargs.get('atr', 0.0)
 
-        # --- LIMIT ORDER LOGIC ---
+        # 1. HANDLE LIMIT ORDERS
         if order_type == 'LIMIT':
-            print(f"📝 ORDER PLACED: {symbol} {qty}x BUY LIMIT @ {price} (TIF: {tif})")
-            new_order = {
-                "id": random.randint(1000, 9999),
-                "action": action,
-                "symbol": symbol,
-                "limit_price": price,
-                "qty": qty,
-                "type": "LIMIT",
-                "tif": tif,
-                "sl": sl,
-                "tp": tp,
+            print(f"📝 ORDER PLACED: {symbol} {qty}x LIMIT @ {price}")
+            self.db.add_order({
+                "symbol": symbol, "action": action, "limit_price": price, 
+                "qty": qty, "sl": sl, "tp": tp, "type": "LIMIT", 
                 "date": str(date_utc)
-            }
-            self.state['pending_orders'].append(new_order)
-            self._save_state()
+            })
             return True
 
-        # --- MARKET EXECUTION (Existing Logic) ---
-        filled_price = self._apply_friction(price, action, symbol)
+        # 2. HANDLE MARKET ORDERS
+        filled_price = self._calculate_execution_price(price, action, atr)
+        current_pos = self.db.get_open_position(symbol)
 
         if action == 1: # BUY
-            if position == "FLAT":
+            if current_pos == "FLAT":
                 has_margin, req_margin = self.check_margin(filled_price, qty)
-                if not has_margin:
-                    return False
+                if not has_margin: return False
 
-                print(f"🚀 BROKER: BUY SENT @ {date_str}")
-                print(f"   📉 FILLED @ {filled_price} (Margin: ${req_margin:.2f})")
+                print(f"🚀 BROKER: BUY FILLED @ {filled_price}")
                 
-                self.state['position'] = {
-                    "type": "LONG",
-                    "symbol": symbol,
-                    "entry_price": filled_price,
-                    "entry_date": str(date_utc),
-                    "qty": qty,
-                    "sl": sl,
-                    "tp": tp,
-                    "margin_locked": req_margin
-                }
-                self._save_state()
+                # DB: Add Trade
+                self.db.add_trade(
+                    ticket=random.randint(10000, 99999), 
+                    symbol=symbol, direction="LONG", size=qty, 
+                    price=filled_price, sl=sl, tp=tp
+                )
+                
+                send_telegram_message(f"🚀 *OPEN LONG*\nPrice: ${filled_price}\nSize: {qty}")
                 return True
 
         elif action == 2: # SELL
-            if isinstance(position, dict):
-                entry_price = position['entry_price']
-                entry_date = position['entry_date']
+            if current_pos != "FLAT":
+                # Close Logic
+                entry_price = current_pos['entry_price']
+                size = current_pos['qty']
                 
-                gross_pnl = (filled_price - entry_price) * self.contract_size * position['qty']
-                comm = self.commission_per_lot * position['qty']
-                swap = self.calculate_swap(entry_date, position['qty'])
-                net_pnl = gross_pnl - comm + swap
+                gross_pnl = (filled_price - entry_price) * self.contract_size * size
+                net_pnl = gross_pnl - (self.commission_per_lot * size)
                 
-                print(f"🔻 BROKER: SELL SENT @ {date_str}")
-                print(f"   📉 FILLED @ {filled_price}")
-                print(f"   💰 GROSS: ${gross_pnl:.2f} | COMM: -${comm:.2f} | SWAP: ${swap:.2f}")
-                print(f"   🏁 NET PnL: ${net_pnl:.2f}")
-
-                self.state['equity'] += net_pnl
-                self.state['position'] = "FLAT"
-                self.state['history'].append({
-                    "date": str(date_utc), 
-                    "pnl": net_pnl, 
-                    "exit": filled_price
-                })
-                self._save_state()
+                print(f"🔻 BROKER: SELL FILLED @ {filled_price} | PnL: ${net_pnl:.2f}")
+                
+                # DB: Close Trade & Update Equity
+                self.db.close_trade(symbol, filled_price, net_pnl)
+                
+                new_equity = self.db.get_account()['equity'] + net_pnl
+                self.db.update_equity(new_equity)
+                
+                icon = "✅" if net_pnl > 0 else "❌"
+                send_telegram_message(f"{icon} *CLOSE LONG*\nPrice: ${filled_price}\nPnL: ${net_pnl:.2f}")
                 return True
                 
         return False
+
+    def check_limits(self, current_price, symbol):
+        # Protocol 9.2: Limits checked against DB state
+        pos = self.db.get_open_position(symbol)
+        
+        if pos != "FLAT":
+            sl = pos['sl']
+            tp = pos['tp']
+            
+            triggered = False
+            reason = ""
+            fill_price = 0.0
+            
+            if sl > 0 and current_price <= sl:
+                triggered = True
+                reason = "SL HIT"
+                fill_price = sl
+            elif tp > 0 and current_price >= tp:
+                triggered = True
+                reason = "TP HIT"
+                fill_price = tp
+                
+            if triggered:
+                print(f"⚡ EXIT TRIGGERED: {reason}")
+                self.place_order(2, symbol, fill_price, pos['qty'], type="MARKET", date=get_utc_now())
+
+        # Check Pending Orders
+        orders = self.db.get_orders(symbol)
+        for order in orders:
+            if order['action'] == 1 and current_price <= order['limit_price']:
+                # Limit Buy Triggered
+                self.db.remove_order(order['order_id']) # Remove from Pending
+                self.place_order(1, symbol, order['limit_price'], order['qty'], 
+                                 type="MARKET", sl=order['sl'], tp=order['tp'], date=get_utc_now())
