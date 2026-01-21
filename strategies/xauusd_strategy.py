@@ -2,8 +2,9 @@ import pandas as pd
 import numpy as np
 import asyncio
 from datetime import datetime
+from ta.trend import SMAIndicator # <--- NEW LIBRARY
 
-from execution.paper_broker import PaperBroker # Use MT5Broker for Live
+from execution.paper_broker import PaperBroker 
 from execution.risk_manager import RiskManager, CircuitBreaker
 from execution.db_manager import DBManager
 from execution.journal_manager import JournalManager
@@ -12,11 +13,12 @@ from strategies.market_structure import MarketStructure
 from strategies.wyckoff import WyckoffAnalyzer
 from execution.calendar_filter import NewsFilter
 from utils.exceptions import NewsEventError
+
+from utils.notifier import TelegramNotifier
 from config.settings import ASSET_CONFIG, STRATEGY_CONFIG, EXECUTION_CONFIG
 
 SYSTEM_BREAKER = None
 
-# --- PROTOCOL 5.1: COOLDOWN ---
 def check_cooldown(db_manager, symbol):
     conn = db_manager._get_conn()
     cursor = conn.cursor()
@@ -34,7 +36,6 @@ def check_cooldown(db_manager, symbol):
     return True, "Ready"
 
 def get_current_portfolio_risk(db_manager, config):
-    # Calculate total $ risk of open trades
     pos = db_manager.get_open_position("XAUUSD")
     if pos != "FLAT":
         risk_usd = abs(pos['entry_price'] - pos['sl']) * pos['qty'] * config['contract_size']
@@ -45,10 +46,9 @@ async def check_market(data_handler):
     global SYSTEM_BREAKER
     
     # 1. SETUP
-    broker = PaperBroker() # <--- Change to MT5Broker() for Live
+    broker = PaperBroker() 
     db = DBManager()
     
-    # Startup Safety
     account = broker.get_positions()
     equity = account['equity']
     
@@ -64,7 +64,10 @@ async def check_market(data_handler):
     if df is None or len(df) < 55: return 
 
     # 3. ANALYSIS
-    df['SMA_50'] = df['Close'].rolling(50).mean()
+    # Use 'ta' library for SMA
+    sma_ind = SMAIndicator(close=df['Close'], window=50)
+    df['SMA_50'] = sma_ind.sma_indicator()
+    
     price = float(df.iloc[-1]['Close'])
     
     # Market Structure & Sentiment
@@ -78,35 +81,34 @@ async def check_market(data_handler):
 
     # 4. TRADING LOGIC
     if current_pos == "FLAT":
-        # Cooldown Check
         is_ready, cool_msg = check_cooldown(db, "XAUUSD")
         if not is_ready: 
             print(f"   🧘 PATIENCE: {cool_msg}")
             return
 
-        # Wyckoff Logic
         has_sc, sc_low, sc_vol, _ = WyckoffAnalyzer.find_selling_climax(df)
         if has_sc:
             is_spring, _ = WyckoffAnalyzer.detect_spring(df.iloc[-1], sc_low, sc_vol)
             if is_spring:
                 print(f"   ✨ SIGNAL: Wyckoff Spring!")
                 
-                # AI Veto
                 if sentiment_label == "BEARISH":
                     print("   🛑 VETO: Sentiment Bearish.")
                     return 
 
-                # Execution Setup
                 sl_price = df.iloc[-1]['Low'] - 2.0
                 tp_price = price + (price - sl_price) * 3
                 
-                # Fat Finger Check
-                if price > (price * 1.05): return # 5% deviation
+                if price > (price * 1.05): return 
                 
-                # Risk Calc
                 config = ASSET_CONFIG["XAUUSD"]
                 risk_load = get_current_portfolio_risk(db, config)
                 qty = RiskManager.calculate_lot_size(equity, price, sl_price, "XAUUSD", 2.0, risk_load)
                 
                 if qty > 0:
                     broker.place_order(1, "XAUUSD", price, qty, sl=sl_price, tp=tp_price)
+                    # 🟢 NEW: Send Telegram Notification
+                    import asyncio
+                    asyncio.create_task(TelegramNotifier.notify_trade(
+                        "BUY", price, qty, sl_price, tp_price, sentiment_label
+                    ))

@@ -18,7 +18,8 @@ from update_gld_data import main as update_gld_data
 from fetch_market_news import main as fetch_news
 from backtest_strategy_rulebased import RuleBasedBacktestEngine
 from paper_trading import PaperTradingEngine
-from telegram_alerts import TelegramAlerts
+
+from utils.notifier import TelegramNotifier
 
 # ========== NEW IMPORTS FOR GATEWAY INTEGRATION ==========
 from src.pretrade_gateway import PreTradeGateway
@@ -57,11 +58,8 @@ class GoldTradingBot:
             self.backtest_tp_percent = float(os.getenv("BACKTEST_TP_PERCENT", "2.0"))
             self.backtest_sl_percent = float(os.getenv("BACKTEST_SL_PERCENT", "1.0"))
 
-            # Initialize alerts
-            self.alerts = TelegramAlerts(
-                self.telegram_bot_token,
-                self.telegram_chat_id
-            )
+
+            # No longer using self.alerts; use TelegramNotifier directly
 
             # Initialize paper trading
             self.paper_trading = PaperTradingEngine(
@@ -113,7 +111,9 @@ class GoldTradingBot:
             
         except Exception as e:
             logging.error(f"Error updating data: {str(e)}")
-            self.alerts.send_error_alert(f"Data update failed: {str(e)}", "WARNING")
+            # Async notification for error
+            import asyncio
+            asyncio.run(TelegramNotifier.send_message(f"Data update failed: {str(e)}"))
             print(f"[-] Error: {str(e)}")
             return False
 
@@ -181,7 +181,15 @@ class GoldTradingBot:
                 result = self.paper_trading.place_buy_order(symbol, quantity, price, trade_id)
                 if result:
                     msg = f"BUY {quantity} {symbol} @ ₹{price:.2f}"
-                    self.alerts.send_buy_alert(symbol, price, quantity, "Rule-Based Signal")
+                    import asyncio
+                    asyncio.run(TelegramNotifier.notify_trade(
+                        trade_type="BUY",
+                        price=price,
+                        size=quantity,
+                        sl=0,
+                        tp=0,
+                        sentiment="Rule-Based Signal"
+                    ))
                     print(f"[+] {msg}")
                     logging.info(msg)
             
@@ -189,7 +197,15 @@ class GoldTradingBot:
                 result = self.paper_trading.place_sell_order(symbol, quantity, price, trade_id)
                 if result:
                     msg = f"SELL {quantity} {symbol} @ ₹{price:.2f}"
-                    self.alerts.send_sell_alert(symbol, price, price, quantity, 0, 0, "Rule-Based Signal")
+                    import asyncio
+                    asyncio.run(TelegramNotifier.notify_trade(
+                        trade_type="SELL",
+                        price=price,
+                        size=quantity,
+                        sl=0,
+                        tp=0,
+                        sentiment="Rule-Based Signal"
+                    ))
                     print(f"[+] {msg}")
                     logging.info(msg)
             
@@ -197,7 +213,8 @@ class GoldTradingBot:
             
         except Exception as e:
             logging.error(f"Error executing trade: {str(e)}")
-            self.alerts.send_error_alert(f"Trade execution error: {str(e)}", "ERROR")
+            import asyncio
+            asyncio.run(TelegramNotifier.send_message(f"Trade execution error: {str(e)}"))
             print(f"[-] Error: {str(e)}")
             return False
 
@@ -205,7 +222,8 @@ class GoldTradingBot:
         """Send daily trading summary via Telegram"""
         try:
             summary = self.paper_trading.get_account_summary()
-            self.alerts.send_daily_summary(summary)
+            import asyncio
+            asyncio.run(TelegramNotifier.send_message(f"Daily Summary: {summary}"))
             
             # Save summary
             os.makedirs('reports', exist_ok=True)
@@ -371,11 +389,9 @@ class GoldTradingBot:
         
         logger.warning(alert_msg)
         
-        # TODO: Integrate with your alert system
-        # Examples:
-        # - Send email notification
-        # - Send Slack message
-        # - Post to webhook
+        # Send Telegram alert for gateway failure
+        import asyncio
+        asyncio.run(TelegramNotifier.send_message(alert_msg))
 
     def generate_daily_summary(self, gateway_blocked: bool = False):
         """

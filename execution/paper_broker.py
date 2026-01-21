@@ -4,7 +4,7 @@ import numpy as np
 from datetime import datetime
 from execution.base_broker import BrokerInterface
 from execution.db_manager import DBManager  # <--- NEW: SQLite Manager
-from execution.telegram_alerts import send_telegram_message
+from utils.notifier import TelegramNotifier
 from utils.time_utils import to_display_time, get_utc_now
 from execution.journal_manager import JournalManager
 from config.settings import ASSET_CONFIG 
@@ -14,7 +14,7 @@ class PaperBroker(BrokerInterface):
     Protocol 9.2: SQLite-Backed Paper Broker.
     Replaces JSON state with ACID-compliant Database transactions.
     """
-    def __init__(self, initial_capital=500000.0):
+    def __init__(self, initial_capital=500000.0, state_file=None):
         # 1. Initialize DB
         self.db = DBManager()
         
@@ -131,7 +131,8 @@ class PaperBroker(BrokerInterface):
                     price=filled_price, sl=sl, tp=tp
                 )
                 
-                send_telegram_message(f"🚀 *OPEN LONG*\nPrice: ${filled_price}\nSize: {qty}\nSL: {sl}")
+                import asyncio
+                asyncio.run(TelegramNotifier.send_message(f"🚀 *OPEN LONG*\nPrice: ${filled_price}\nSize: {qty}\nSL: {sl}"))
                 return True
 
         elif action == 2: # SELL (Close)
@@ -171,7 +172,8 @@ class PaperBroker(BrokerInterface):
                 self.db.update_equity(new_equity)
                 
                 icon = "✅" if net_pnl > 0 else "❌"
-                send_telegram_message(f"{icon} *CLOSE LONG*\nPrice: ${filled_price}\nPnL: ${net_pnl:.2f}")
+                import asyncio
+                asyncio.run(TelegramNotifier.send_message(f"{icon} *CLOSE LONG*\nPrice: ${filled_price}\nPnL: ${net_pnl:.2f}"))
                 return True
                 
         return False

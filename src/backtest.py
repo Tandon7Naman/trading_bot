@@ -57,19 +57,19 @@ class BacktestEngine:
             return None
 
         print(f"\nRunning backtest with initial equity of ₹{self.initial_equity:,.2f}...")
-        
+
         equity = self.initial_equity
         position = 0  # 0 for no position, 1 for long
         entry_price = 0
-        
+
         feature_cols = self.ohlc_cols
-        
+
         for i in range(self.lookback, len(self.data)):
             current_data_window = self.data[feature_cols].iloc[i-self.lookback:i].values
-            
+
             scaled_window = self.scaler.transform(current_data_window)
             X_test = np.reshape(scaled_window, (1, self.lookback, len(feature_cols)))
-            
+
             prediction = self.model.predict(X_test, verbose=0)[0][0]
             signal = 1 if prediction > 0.5 else 0
 
@@ -87,13 +87,27 @@ class BacktestEngine:
                 exit_price = current_price
                 pnl = exit_price - entry_price
                 equity += pnl
-                
+
                 if self.trades and self.trades[-1]['type'] == 'BUY':
                     self.trades[-1].update({
                         'exit_date': current_date, 'exit_price': exit_price, 'pnl': pnl
                     })
 
             self.equity_curve.append(equity)
+
+        if not self.trades:
+            # Return a valid dictionary with zeroed metrics instead of just a message
+            return {
+                'initial_capital': self.initial_equity,
+                'final_equity': self.initial_equity,
+                'total_pnl': 0.0,
+                'return_pct': 0.0,
+                'max_drawdown_pct': 0.0,
+                'total_trades': 0,
+                'win_rate_pct': 0.0,
+                'sharpe_ratio': 0.0,
+                'status': 'Finished (No Trades)'
+            }
 
         print("Backtest finished.")
         return self.calculate_performance()

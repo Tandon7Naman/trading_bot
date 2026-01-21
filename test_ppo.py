@@ -58,34 +58,44 @@ def test_ppo_agent():
         print("❌ PPO agent not found. Train it first with train_ppo.py")
         return
     
+    # --- SHAPE TEST: Ensure predict() works with correct dummy observation ---
+    print("\n🧪 Testing PPO predict() with dummy observation...")
+    dummy_obs = np.zeros((16,), dtype=np.float32)
+    try:
+        _ = agent.predict(dummy_obs, deterministic=True)
+        print("   ✅ PPO predict() accepted dummy observation of shape (16,)")
+    except Exception as e:
+        print(f"   ❌ PPO predict() failed with dummy observation: {e}")
+        return
+
     # Run test episode
     print("\n▶️ Running test episode...")
     obs, _ = env.reset()
     done = False
     step = 0
-    
+
     actions_taken = {'HOLD': 0, 'BUY': 0, 'SELL': 0}
     action_names = ['HOLD', 'BUY', 'SELL']
-    
+
     while not done and step < 100:  # Limit steps for quick test
         action = agent.predict(obs, deterministic=True)
         actions_taken[action_names[action]] += 1
-        
+
         obs, reward, terminated, truncated, info = env.step(action)
         done = terminated or truncated
-        
+
         if step % 20 == 0:
             print(f"   Step {step}: Action={action_names[action]}, "
                   f"Capital=₹{info['capital']:,.0f}, "
                   f"Position={info['position']}")
-        
+
         step += 1
-    
+
     # Get final metrics
     print("\n📊 Test Results:")
     print("-" * 60)
     metrics = env.get_metrics()
-    
+
     if metrics:
         print(f"   Total Return: {metrics['total_return']:.2f}%")
         print(f"   Trades: {metrics['num_trades']}")
@@ -93,12 +103,12 @@ def test_ppo_agent():
         print(f"   Sharpe Ratio: {metrics['sharpe_ratio']:.2f}")
         print(f"   Max Drawdown: {metrics['max_drawdown']:.2f}%")
         print(f"   Final Capital: ₹{metrics['final_capital']:,.0f}")
-    
+
     print("\n📈 Action Distribution:")
     for action, count in actions_taken.items():
         pct = count / sum(actions_taken.values()) * 100
         print(f"   {action}: {count} ({pct:.1f}%)")
-    
+
     print("\n" + "="*60)
     print("✅ TEST COMPLETE")
     print("="*60)

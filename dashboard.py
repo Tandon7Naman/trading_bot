@@ -171,7 +171,7 @@ with tab_live:
             )
             
             # Using key to avoid warnings
-            st.plotly_chart(fig, use_container_width=True, key="live_chart")
+            st.plotly_chart(fig, width='stretch', key="live_chart")
         else:
             st.info("Waiting for Data Feed connection...")
 
@@ -183,7 +183,7 @@ with tab_live:
         if pending:
             st.write(f"**Pending: {len(pending)}**")
             pending_df = pd.DataFrame(pending)
-            st.dataframe(pending_df[['type', 'limit_price', 'qty']], hide_index=True)
+            st.dataframe(pending_df[['type', 'limit_price', 'qty']], hide_index=True, width='stretch')
         else:
             st.caption("No Active Limit Orders")
             
@@ -193,7 +193,7 @@ with tab_live:
         st.subheader("Recent Fills")
         if history:
             recents = pd.DataFrame(history).iloc[::-1].head(5)
-            st.dataframe(recents[['exit', 'pnl']], hide_index=True)
+            st.dataframe(recents[['exit', 'pnl']], hide_index=True, width='stretch')
         else:
             st.caption("No Recent Activity")
 
@@ -215,7 +215,7 @@ with tab_perf:
             fillcolor='rgba(0, 255, 0, 0.1)'
         ))
         fig_pnl.update_layout(title="Equity Growth Curve", xaxis_title="Trade #", yaxis_title="PnL ($)", template="plotly_dark")
-        st.plotly_chart(fig_pnl, use_container_width=True)
+        st.plotly_chart(fig_pnl, width='stretch')
     else:
         st.info("Execute trades to view Performance Analytics.")
 

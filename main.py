@@ -1,10 +1,15 @@
+import threading
 import asyncio
 import sys
 import os
 from datetime import datetime
 
 # Add project root to path
+# Add project root to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+# Import the EOD report scheduler
+from utils.run_scheduler import run_scheduler
 
 from config.settings import ASSET_CONFIG, ENABLED_MARKETS
 from execution.db_manager import DBManager
@@ -85,6 +90,9 @@ async def main():
         await asyncio.sleep(1) 
 
 if __name__ == "__main__":
+    # Start the EOD report scheduler in a background thread
+    scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
+    scheduler_thread.start()
     try:
         asyncio.run(main())
     except KeyboardInterrupt:

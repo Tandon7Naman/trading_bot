@@ -10,7 +10,7 @@ class MT5Broker(BrokerInterface):
         import time
         from datetime import datetime
         from execution.base_broker import BrokerInterface
-        from execution.telegram_alerts import send_telegram_message
+        from utils.notifier import TelegramNotifier
         from config.settings import ASSET_CONFIG
 
         class MT5Broker(BrokerInterface):
@@ -109,12 +109,14 @@ class MT5Broker(BrokerInterface):
         
                 if result.retcode != mt5.TRADE_RETCODE_DONE:
                     print(f"   ❌ MT5 ERROR: {result.comment} (Code: {result.retcode})")
-                    send_telegram_message(f"⚠️ *EXECUTION FAILED*\n{result.comment}")
+                    import asyncio
+                    asyncio.run(TelegramNotifier.send_message(f"⚠️ *EXECUTION FAILED*\n{result.comment}"))
                     return False
             
                 print(f"   ✅ FILLED: Ticket #{result.order}")
         
                 # Telemetry
                 msg = "OPEN LONG" if action == 1 else "OPEN SHORT"
-                send_telegram_message(f"🚀 *{msg}*\nSize: {qty}\nSL: {sl}\nTicket: {result.order}")
+                import asyncio
+                asyncio.run(TelegramNotifier.send_message(f"🚀 *{msg}*\nSize: {qty}\nSL: {sl}\nTicket: {result.order}"))
                 return True

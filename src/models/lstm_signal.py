@@ -34,9 +34,8 @@ class LSTMSignalPredictor:
             return
         
         self.model = Sequential([
-            LSTM(64, activation='relu', 
-                 input_shape=(self.window_size, self.num_features),
-                 return_sequences=True),
+            tf.keras.Input(shape=(self.window_size, self.num_features)),
+            LSTM(64, activation='relu', return_sequences=True),
             Dropout(0.2),
             LSTM(32, activation='relu', return_sequences=False),
             Dropout(0.2),

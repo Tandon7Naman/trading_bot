@@ -56,7 +56,8 @@ def test_lstm_model():
     print(f"   Sample prediction: {prediction:.6f}")
     
     print("\n✅ LSTM Model Test Complete!")
-    return model, metrics
+    assert model is not None
+    assert metrics is not None
 
 def test_indian_features():
     """Test Indian market features"""
@@ -109,7 +110,7 @@ def test_indian_features():
     print(f"   ✅ Positive for gold" if real_yield < 0 else "   ⚠️ Negative for gold")
     
     print("\n✅ Indian Features Test Complete!")
-    return features
+    assert features is not None
 
 def integration_test():
     """Test LSTM + Indian Features integration"""

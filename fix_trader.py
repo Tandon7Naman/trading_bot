@@ -1,3 +1,4 @@
+# This file has been archived and is no longer in use.
 # fix_trader.py
 import os
 
@@ -39,8 +40,8 @@ def add_indicators(df):
 
 # --- HELPER: JSON CONVERTER ---
 def convert(o):
-    if isinstance(o, np.int64): return int(o)
-    if isinstance(o, np.float32): return float(o)
+    if isinstance(o, int): return int(o)
+    if isinstance(o, float): return float(o)
     return o
 
 # --- MAIN TRADING FUNCTION ---
@@ -121,8 +122,9 @@ def check_market():
                 "qty": 10
             }
             try:
-                from telegram_alerts import send_telegram_message
-                send_telegram_message(f"🚀 BUY SIGNAL\nPrice: ₹{current_price:.2f}\nRSI: {current_row['rsi']:.1f}")
+                from utils.notifier import TelegramNotifier
+                import asyncio
+                asyncio.run(TelegramNotifier.send_message(f"🚀 BUY SIGNAL\nPrice: ₹{current_price:.2f}\nRSI: {current_row['rsi']:.1f}"))
             except: pass
             trade_happened = True
         else:
@@ -146,9 +148,10 @@ def check_market():
             })
             
             try:
-                from telegram_alerts import send_telegram_message
+                from utils.notifier import TelegramNotifier
                 emoji = "✅" if pnl > 0 else "❌"
-                send_telegram_message(f"{emoji} SELL SIGNAL\nP&L: ₹{pnl:.2f}\nExit: ₹{current_price:.2f}")
+                import asyncio
+                asyncio.run(TelegramNotifier.send_message(f"{emoji} SELL SIGNAL\nP&L: ₹{pnl:.2f}\nExit: ₹{current_price:.2f}"))
             except: pass
             
             trade_happened = True

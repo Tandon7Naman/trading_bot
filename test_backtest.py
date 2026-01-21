@@ -5,17 +5,21 @@ def test_backtest():
     print("  🧪 BACKTEST ENGINE TEST")
     print("="*70 + "\n")
     
-    # Run 1-year backtest
-    backtest = BacktestEngine()
-    metrics = backtest.run_backtest(
-        num_days=252,           # 1 year
-        initial_capital=500000,
-        position_size=1.0,
-        lookback=20
+    # Run 1-year backtest with required arguments
+    backtest = BacktestEngine(
+        csv_path='data/gld_data.csv',
+        model_path='models/lstm_consolidated.h5',
+        scaler_path='models/scaler.save',
+        start_date='2023-01-01',
+        initial_equity=500000.0,
+        ohlc_cols=['open', 'high', 'low', 'close'],
+        date_col='timestamp',
+        lookback=60
     )
+    metrics = backtest.run_backtest()
     
     # Print results
-    backtest.print_results(metrics)
+    print(metrics)
     
     # Verify metrics exist
     required_keys = [

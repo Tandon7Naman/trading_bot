@@ -63,25 +63,27 @@ class TestGoldBot(unittest.TestCase):
         """If price crashes $50 instantly, do we calculate the loss correctly?"""
         # 1. Buy 1 Lot at $2600
         self.broker.place_order(1, "XAUUSD", 2600.00, 1.0, date="NOW")
-        
+
         # 2. Force Flash Crash to $2550 (Exit)
         crash_price = 2550.00
-        
+
         # 3. Close Trade
         self.broker.place_order(2, "XAUUSD", crash_price, 1.0, date="NOW")
-        
-        # 4. Verify Loss
-        # Loss = ($2550 - $2600) * 100 oz = -$5000
-        # Commission = $7
-        # Expected Net = -$5007 (plus spread/slippage variance)
-        
-        history = self.broker._load_state()['history']
-        last_trade = history[-1]
-        pnl = last_trade['pnl']
-        
+
+        # 4. Verify Loss using DBManager (public API)
+        from execution.db_manager import DBManager
+        db = DBManager()
+        conn = db._get_conn()
+        cursor = conn.cursor()
+        cursor.execute("SELECT pnl FROM trades WHERE symbol=? AND status='CLOSED' ORDER BY exit_time DESC LIMIT 1", ("XAUUSD",))
+        row = cursor.fetchone()
+        conn.close()
+        pnl = row[0] if row else None
+
         print(f"🧪 Test 3: Crash   | Drop: $50 | PnL: ${pnl:.2f}")
-        
+
         # Assert we lost money (allowing for slippage variance)
+        self.assertIsNotNone(pnl)
         self.assertTrue(pnl < -5000)
 
 if __name__ == '__main__':
