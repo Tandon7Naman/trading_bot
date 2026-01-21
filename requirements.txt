@@ -1,3 +1,10 @@
+# RSS/Atom Feed Parsing
+feedparser
+# --- Protocol 6.4: Modern Stack ---
+ccxt
+pandas_ta
+python-dotenv
+schedule
 absl-py==2.3.1
 aiohappyeyeballs==2.6.1
 aiohttp==3.13.2

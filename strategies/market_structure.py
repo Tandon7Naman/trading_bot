@@ -1,26 +1,20 @@
 import pandas as pd
-import numpy as np
+import pandas_ta as ta # <--- The Powerhouse
 
 class MarketStructure:
     """
     Phase 3 Compliance: Regime & Liquidity.
-    - Filters out 'Scam Wicks' (Low Liquidity).
-    - Identifies Trending vs Ranging (ADX).
+    Refactored with 'pandas_ta' for professional-grade speed and accuracy.
     """
     
     @staticmethod
     def check_liquidity(df, price, min_daily_vol_usd=50_000_000):
-        """
-        Protocol 3.3: Liquidity Filtering.
-        Prevents trading during illiquid hours or on dead assets.
-        """
         if df.empty: return False, "No Data"
         
         # Calculate Rolling Average Volume (30 periods)
+        # pandas_ta doesn't replace simple mean, but we keep this consistent
         avg_vol = df['Volume'].rolling(window=30).mean().iloc[-1]
         
-        # Estimate Daily Dollar Volume (Heuristic)
-        # 1440 minutes per day.
         est_daily_vol_usd = avg_vol * price * 1440 
         
         if est_daily_vol_usd < min_daily_vol_usd:
@@ -32,32 +26,32 @@ class MarketStructure:
     def get_regime(df, period=14):
         """
         Protocol 3.2: Regime Detection (ADX).
-        Returns: 'TRENDING' (>25) or 'RANGING' (<25).
+        Uses pandas_ta for vector-based calculation.
         """
         if len(df) < period + 1: return "UNCERTAIN", 0.0
 
-        # ADX Calculation (Wilder's Smoothing)
-        df = df.copy()
-        df['H-L'] = df['High'] - df['Low']
-        df['H-PC'] = abs(df['High'] - df['Close'].shift(1))
-        df['L-PC'] = abs(df['Low'] - df['Close'].shift(1))
-        df['TR'] = df[['H-L', 'H-PC', 'L-PC']].max(axis=1)
-        
-        df['UpMove'] = df['High'] - df['High'].shift(1)
-        df['DownMove'] = df['Low'].shift(1) - df['Low']
-        
-        df['+DM'] = np.where((df['UpMove'] > df['DownMove']) & (df['UpMove'] > 0), df['UpMove'], 0)
-        df['-DM'] = np.where((df['DownMove'] > df['UpMove']) & (df['DownMove'] > 0), df['DownMove'], 0)
-        
-        # Exponential Moving Average for smoothness
-        tr = df['TR'].ewm(span=period, adjust=False).mean()
-        plus_di = 100 * (df['+DM'].ewm(span=period, adjust=False).mean() / tr)
-        minus_di = 100 * (df['-DM'].ewm(span=period, adjust=False).mean() / tr)
-        
-        dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di)
-        adx = dx.ewm(span=period, adjust=False).mean().iloc[-1]
-        
-        if adx > 25:
-            return "TRENDING", adx
-        else:
-            return "RANGING", adx
+        # --- THE MODERN STACK UPGRADE ---
+        # Old way: 30 lines of manual math.
+        # New way: 1 line.
+        try:
+            # Calculate ADX using pandas_ta
+            # Returns a DataFrame with columns like ADX_14, DMP_14, DMN_14
+            adx_df = df.ta.adx(length=period)
+            
+            if adx_df is None or adx_df.empty:
+                return "UNCERTAIN", 0.0
+                
+            # Get the latest ADX value
+            # Column name is typically "ADX_14"
+            current_adx = adx_df[f"ADX_{period}"].iloc[-1]
+            
+            if pd.isna(current_adx): return "UNCERTAIN", 0.0
+            
+            if current_adx > 25:
+                return "TRENDING", current_adx
+            else:
+                return "RANGING", current_adx
+                
+        except Exception as e:
+            print(f"   ⚠️ ADX Calc Error: {e}")
+            return "UNCERTAIN", 0.0
