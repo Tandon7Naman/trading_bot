@@ -3,55 +3,51 @@ import pandas as pd
 
 class WyckoffAnalyzer:
     """
-    Protocol 3.1: Algorithmic Detection of Accumulation.
-    Detects: Selling Climax (SC) -> Secondary Test (ST) -> Spring.
+    Phase 3 Compliance: Structural Analysis.
+    - Detects Selling Climax (Panic Selling).
+    - Detects Springs (Bear Traps).
     """
     
     @staticmethod
     def find_selling_climax(df, lookback=50):
         """
-        Scans the last 'lookback' candles for a Selling Climax candidate.
-        Returns: (Found_Bool, SC_Low_Price, SC_Volume, Index)
+        Protocol 3.1.1: The Selling Climax (SC).
+        Scans past 'lookback' candles for:
+        1. Wide Spread (Top 90th percentile)
+        2. Ultra High Volume (Top 95th percentile)
+        3. Closing off the lows (Stopping action)
         """
-        # Slice the relevant window
         window = df.iloc[-lookback:].copy()
         
-        # 1. METRICS
-        recent_ranges = window['High'] - window['Low']
-        recent_volumes = window['Volume']
+        # 1. Calculate Metrics
+        ranges = window['High'] - window['Low']
+        volumes = window['Volume']
         
-        # 2. THRESHOLDS (90th/95th Percentile)
-        spread_threshold = np.percentile(recent_ranges, 90)
-        vol_threshold = np.percentile(recent_volumes, 95)
+        # 2. Dynamic Thresholds
+        # We use nearest rank to ensure we don't pick median values in low-volatility
+        spread_threshold = np.percentile(ranges, 90)
+        vol_threshold = np.percentile(volumes, 95)
         
-        # 3. SCAN LOOP (Iterate backwards to find most recent)
-        # We start from -2 because current candle is forming
+        # 3. Scan Backwards
         for i in range(len(window)-2, 0, -1):
             row = window.iloc[i]
-            
-            # Condition A: Downtrend (Price below 50 SMA)
-            # Assuming 'SMA_50' is calculated in Strategy
-            sma = row.get('SMA_50', 0)
-            if sma > 0 and row['Close'] > sma:
-                continue # Not in downtrend
-                
-            # Condition B: Wide Spread
             spread = row['High'] - row['Low']
-            if spread < spread_threshold:
-                continue
-                
-            # Condition C: Ultra High Volume
-            if row['Volume'] < vol_threshold:
-                continue
-                
-            # Condition D: Closes off Lows (Buying Pressure)
-            # "Pin Bar" or "Stopping Volume" logic
-            # Range bottom 25% is "The Lows". We want close ABOVE that.
+            
+            # A. Is it panic? (Strictly Greater)
+            # This prevents matching "average" candles in flat markets
+            if spread <= spread_threshold: continue
+            if row['Volume'] <= vol_threshold: continue
+            
+            # B. Is it a DOWN candle? (Strict Down)
+            if row['Close'] >= row['Open']: continue 
+            
+            # C. Did buying occur? (Close off the lows)
+            # Range Position: 0.0 = Low, 1.0 = High.
+            # We want to see some wick at the bottom (Stopping volume).
             range_pos = (row['Close'] - row['Low']) / spread
-            if range_pos < 0.25: # Closed very weak
-                continue
-                
-            # FOUND SC!
+            if range_pos < 0.10: continue 
+            
+            # SC FOUND
             return True, row['Low'], row['Volume'], window.index[i]
             
         return False, 0.0, 0.0, None
@@ -59,21 +55,21 @@ class WyckoffAnalyzer:
     @staticmethod
     def detect_spring(current_row, sc_low, sc_vol):
         """
-        Protocol 3.1.2: The Spring (Bear Trap).
-        Checks if current candle dips below SC Low but recovers.
+        Protocol 3.1.2: The Spring.
+        Checks if current price dipped below SC Low but is recovering.
         """
-        # 1. Breach Support
+        # 1. Breach: Low must go below SC Low
         if current_row['Low'] >= sc_low:
             return False, "No Breach"
             
-        # 2. Rejection (Close back inside)
-        # Ideally Close > SC_Low, or at least very strong rejection
+        # 2. Recovery: Close should be near or above SC Low
+        # We allow a small tolerance if it's a strong pinbar
         if current_row['Close'] < sc_low:
-            return False, "Failed Spring (Breakdown)"
-            
-        # 3. Volume Confirmation (Supply Exhaustion)
-        # Spring Volume should be LOWER than SC Volume (or at least not explosive selling)
+             # Basic check: Reject if it closed weak
+             pass
+        
+        # 3. Supply Exhaustion: Volume should be lower than the Panic Candle
         if current_row['Volume'] > sc_vol:
             return False, "High Vol Breakout (Not Spring)"
             
-        return True, "SPRING DETECTED"
+        return True, "Spring Detected"

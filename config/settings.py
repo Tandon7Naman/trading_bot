@@ -17,7 +17,18 @@ EXECUTION_CONFIG = {
     "max_slippage_pct": 0.05, # Reject if price deviates > 5%
     "max_notional_value": 500_000 # Max $500k per order
 }
+
 import os
+import sys
+
+# Try to import secrets, handle missing file gracefully
+try:
+    from config.secrets import BINANCE_SECRETS, NEWS_SECRETS, TELEGRAM_SECRETS
+except ImportError:
+    print("❌ ERROR: config/secrets.py not found!")
+    print("   Please create it with your API keys.")
+    sys.exit(1)
+
 from datetime import time
 
 # Base Directory
@@ -59,6 +70,7 @@ ASSET_CONFIG = {
 
     # --- MCX GOLD FUTURES (INDIA) ---
     "MCX_GOLD": {
+        # Enabled Markets
         "symbol_root": "GOLD",     
         "data_symbol": "GOLDM",    
         "data_file": os.path.join(BASE_DIR, "data", "MCX_GOLD_1m.csv"),
@@ -85,18 +97,20 @@ ASSET_CONFIG = {
 }
 
 
-# --- PROTOCOL 7.3: TELEMETRY ---
+
+# --- TELEGRAM CONFIG ---
 TELEGRAM_CONFIG = {
     "enabled": True,
-    "bot_token": "YOUR_BOT_TOKEN_HERE", 
-    "chat_id": "YOUR_CHAT_ID_HERE"      
+    "bot_token": TELEGRAM_SECRETS["bot_token"],
+    "chat_id": TELEGRAM_SECRETS["chat_id"]
 }
 
-# --- PROTOCOL 4.1: NEWS & AI CONFIG ---
+
+# --- NEWS CONFIG ---
 NEWS_CONFIG = {
     "enabled": True,
-    "api_key": "ee4c539decb34898b99ae395a8f6327b", # Get from newsapi.org
-    "sources": "bloomberg,reuters,cnbc,financial-times,crypto-coins-news",
-    "cache_seconds": 3600, # Only fetch news once per hour (Save API calls)
-    "sentiment_threshold": 0.5 # Confidence required to trigger a Veto
+    "api_key": NEWS_SECRETS["api_key"], # Loaded securely
+    "sources": "bloomberg,reuters,cnbc,financial-times",
+    "cache_seconds": 3600,
+    "sentiment_threshold": 0.5
 }
