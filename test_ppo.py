@@ -3,61 +3,59 @@ Test PPO Agent
 Quick testing and validation script
 """
 
-import pandas as pd
 import numpy as np
-from trading_environment import GoldTradingEnv
-from ppo_agent import GoldPPOAgent
-from lstm_model_consolidated import GoldLSTMModel
+import pandas as pd
 from stable_baselines3.common.vec_env import DummyVecEnv
+
+from lstm_model_consolidated import GoldLSTMModel
+from ppo_agent import GoldPPOAgent
+from trading_environment import GoldTradingEnv
+
 
 def test_ppo_agent():
     """
     Test trained PPO agent
     """
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🧪 TESTING PPO AGENT")
-    print("="*60)
-    
+    print("=" * 60)
+
     # Load data
     print("\n📊 Loading data...")
     try:
-        df = pd.read_csv('data/mcx_gold_historical.csv', parse_dates=['timestamp'])
+        df = pd.read_csv("data/mcx_gold_historical.csv", parse_dates=["timestamp"])
         print(f"✅ Loaded {len(df)} records")
     except FileNotFoundError:
         print("❌ No data file found. Please run train_ppo.py first.")
         return
-    
+
     # Load LSTM model
     print("\n🧠 Loading LSTM model...")
     lstm_model = GoldLSTMModel(lookback=60, features=4)
     try:
-        lstm_model.load('models/lstm_consolidated.h5')
+        lstm_model.load("models/lstm_consolidated.h5")
         print("✅ LSTM loaded")
-    except:
-        print("❌ LSTM model not found. Train it first.")
+    except Exception as e:
+        print(f"❌ LSTM model not found. Train it first. Error: {e}")
         return
-    
+
     # Create environment (use last 20% of data for testing)
     print("\n🎮 Creating test environment...")
-    test_df = df.iloc[int(0.8*len(df)):].reset_index(drop=True)
-    
-    env = GoldTradingEnv(
-        df=test_df,
-        lstm_model=lstm_model,
-        initial_capital=100000
-    )
-    
+    test_df = df.iloc[int(0.8 * len(df)) :].reset_index(drop=True)
+
+    env = GoldTradingEnv(df=test_df, lstm_model=lstm_model, initial_capital=100000)
+
     # Load PPO agent
     print("\n🤖 Loading PPO agent...")
     agent = GoldPPOAgent(env=DummyVecEnv([lambda: env]))
-    
+
     try:
-        agent.load('models/ppo_gold_agent')
+        agent.load("models/ppo_gold_agent")
         print("✅ PPO agent loaded")
-    except:
-        print("❌ PPO agent not found. Train it first with train_ppo.py")
+    except Exception as e:
+        print(f"❌ PPO agent not found. Train it first with train_ppo.py. Error: {e}")
         return
-    
+
     # --- SHAPE TEST: Ensure predict() works with correct dummy observation ---
     print("\n🧪 Testing PPO predict() with dummy observation...")
     dummy_obs = np.zeros((16,), dtype=np.float32)
@@ -74,8 +72,8 @@ def test_ppo_agent():
     done = False
     step = 0
 
-    actions_taken = {'HOLD': 0, 'BUY': 0, 'SELL': 0}
-    action_names = ['HOLD', 'BUY', 'SELL']
+    actions_taken = {"HOLD": 0, "BUY": 0, "SELL": 0}
+    action_names = ["HOLD", "BUY", "SELL"]
 
     while not done and step < 100:  # Limit steps for quick test
         action = agent.predict(obs, deterministic=True)
@@ -85,9 +83,11 @@ def test_ppo_agent():
         done = terminated or truncated
 
         if step % 20 == 0:
-            print(f"   Step {step}: Action={action_names[action]}, "
-                  f"Capital=₹{info['capital']:,.0f}, "
-                  f"Position={info['position']}")
+            print(
+                f"   Step {step}: Action={action_names[action]}, "
+                f"Capital=₹{info['capital']:,.0f}, "
+                f"Position={info['position']}"
+            )
 
         step += 1
 
@@ -109,9 +109,10 @@ def test_ppo_agent():
         pct = count / sum(actions_taken.values()) * 100
         print(f"   {action}: {count} ({pct:.1f}%)")
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("✅ TEST COMPLETE")
-    print("="*60)
+    print("=" * 60)
+
 
 if __name__ == "__main__":
     test_ppo_agent()

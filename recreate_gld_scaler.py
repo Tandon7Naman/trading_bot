@@ -6,8 +6,10 @@ from the saved NumPy arrays.
 
 import os
 import pickle
+
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
+
 
 def recreate_scaler():
     """
@@ -39,20 +41,22 @@ def recreate_scaler():
         scaler.scale_ = scaler_scale
         # The number of features seen during fit is also required
         scaler.n_features_in_ = scaler_min.shape[0]
-        if hasattr(scaler, 'feature_names_in_'):
-             scaler.feature_names_in_ = np.array([f'feature_{i}' for i in range(scaler.n_features_in_)], dtype=object)
-
+        if hasattr(scaler, "feature_names_in_"):
+            scaler.feature_names_in_ = np.array(
+                [f"feature_{i}" for i in range(scaler.n_features_in_)], dtype=object
+            )
 
         # Save the reconstituted scaler object using pickle
-        with open(output_path, 'wb') as f:
+        with open(output_path, "wb") as f:
             pickle.dump(scaler, f)
-        
+
         print(f"✓ Scaler object successfully recreated and saved to:\n  {output_path}")
         print("=" * 60)
 
     except Exception as e:
         print(f"✗ ERROR: An error occurred during scaler recreation: {e}")
         print("=" * 60)
+
 
 if __name__ == "__main__":
     recreate_scaler()

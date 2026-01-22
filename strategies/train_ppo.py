@@ -1,16 +1,29 @@
-import pandas as pd
-import numpy as np
+import os
+import warnings
+
 import gym
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 from gym import spaces
 from stable_baselines3 import PPO
-import os
+from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.vec_env import DummyVecEnv
+
+from lstm_model_consolidated import GoldLSTMModel
+from ppo_agent import GoldPPOAgent
+
+# Suppress warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 # --- SETTINGS ---
-DATA_FILE = 'data/MCX_gold_daily.csv'
+DATA_FILE = "data/MCX_gold_daily.csv"
 MODEL_DIR = "models"
 LOG_DIR = "logs"
 os.makedirs(MODEL_DIR, exist_ok=True)
 os.makedirs(LOG_DIR, exist_ok=True)
+
 
 # --- INDICATOR CALCULATIONS ---
 def add_indicators(df):
@@ -19,46 +32,45 @@ def add_indicators(df):
     This gives the AI 'X-Ray Vision' into market trends.
     """
     df = df.copy()
-    
+
     # 1. RSI (Relative Strength Index) - 14 periods
-    delta = df['close'].diff()
+    delta = df["close"].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / loss
-    df['rsi'] = 100 - (100 / (1 + rs))
-    
+    df["rsi"] = 100 - (100 / (1 + rs))
+
     # 2. MACD (Moving Average Convergence Divergence)
-    exp1 = df['close'].ewm(span=12, adjust=False).mean()
-    exp2 = df['close'].ewm(span=26, adjust=False).mean()
-    df['macd'] = exp1 - exp2
-    df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
-    
+    exp1 = df["close"].ewm(span=12, adjust=False).mean()
+    exp2 = df["close"].ewm(span=26, adjust=False).mean()
+    df["macd"] = exp1 - exp2
+    df["macd_signal"] = df["macd"].ewm(span=9, adjust=False).mean()
+
     # 3. SMA (Simple Moving Average) - 50 periods (Trend)
-    df['sma_50'] = df['close'].rolling(window=50).mean()
-    
+    df["sma_50"] = df["close"].rolling(window=50).mean()
+
     # Drop NaN values created by the calculations
     df.dropna(inplace=True)
     return df
 
+
 # --- CUSTOM TRADING ENVIRONMENT ---
 class GoldTradingEnv(gym.Env):
     def __init__(self, df):
-        super(GoldTradingEnv, self).__init__()
+        super().__init__()
         self.df = df
         self.current_step = 0
         self.max_steps = len(df) - 1
-        
+
         # Action: 0=Hold, 1=Buy, 2=Sell
         self.action_space = spaces.Discrete(3)
-        
+
         # Observation: [Close, RSI, MACD, MACD_Signal, SMA_50]
         # We normalize values loosely to help the AI learn
-        self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(5,), dtype=np.float32
-        )
-        
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(5,), dtype=np.float32)
+
         self.balance = 500000.0
-        self.position = 0.0 # 0=Flat, 1=Long
+        self.position = 0.0  # 0=Flat, 1=Long
         self.entry_price = 0.0
 
     def reset(self):
@@ -71,61 +83,58 @@ class GoldTradingEnv(gym.Env):
     def _next_observation(self):
         # Return the feature vector for the current step
         row = self.df.iloc[self.current_step]
-        return np.array([
-            row['close'],
-            row['rsi'],
-            row['macd'],
-            row['macd_signal'],
-            row['sma_50']
-        ], dtype=np.float32)
+        return np.array(
+            [row["close"], row["rsi"], row["macd"], row["macd_signal"], row["sma_50"]],
+            dtype=np.float32,
+        )
 
     def step(self, action):
-        current_price = self.df.iloc[self.current_step]['close']
+        current_price = self.df.iloc[self.current_step]["close"]
         reward = 0
         done = False
-        
+
         # Execute Trade Logic
-        if action == 1: # BUY
+        if action == 1:  # BUY
             if self.position == 0:
                 self.position = 1
                 self.entry_price = current_price
                 # Small penalty for transaction cost
-                reward = -50 
-        
-        elif action == 2: # SELL
-            if self.position == 1:
-                self.position = 0
-                pnl = current_price - self.entry_price
-                self.balance += pnl
-                # Reward is the Profit (or Loss)
-                reward = pnl
-        
+                reward = -50
+
+        elif action == 2 and self.position == 1:  # SELL
+            self.position = 0
+            pnl = current_price - self.entry_price
+            self.balance += pnl
+            # Reward is the Profit (or Loss)
+            reward = pnl
+
         # Step forward
         self.current_step += 1
         if self.current_step >= self.max_steps:
             done = True
-            
+
         obs = self._next_observation()
         return obs, reward, done, {}
+
 
 # --- MAIN TRAINING LOOP ---
 if __name__ == "__main__":
     print("🧠 STARTING BRAIN UPGRADE (Training V2)...")
-    
+
     # 1. Load and Prepare Data
     raw_df = pd.read_csv(DATA_FILE)
     df = add_indicators(raw_df)
     print(f"   Data Loaded: {len(df)} rows with Indicators (RSI, MACD).")
-    
+
     # 2. Initialize Environment
     env = GoldTradingEnv(df)
-    
+
     # 3. Train the Model
     model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=LOG_DIR)
-    
+
     print("   Training in progress... (This might take 30 seconds)")
     model.learn(total_timesteps=30000)
-    
+
     # 4. Save the New Brain
     model.save(f"{MODEL_DIR}/ppo_gold_agent")
     print("✅ NEW BRAIN SAVED! The AI now understands RSI & MACD.")
@@ -133,23 +142,6 @@ if __name__ == "__main__":
 Training Pipeline for PPO Agent
 FIXED: Monitor wrapper, episode tracking, and real data handling
 """
-
-import os
-import warnings
-from typing import List
-
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-from ppo_agent import GoldPPOAgent
-from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.vec_env import DummyVecEnv
-from trading_environment import GoldTradingEnv
-from lstm_model_consolidated import GoldLSTMModel
-
-# Suppress warnings
-warnings.filterwarnings('ignore', category=UserWarning)
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
 def train_ppo_agent():
@@ -161,7 +153,7 @@ def train_ppo_agent():
     # Step 1: Load data
     print("\n📊 Step 1: Loading MCX Gold data...")
     try:
-        df = pd.read_csv('data/mcx_gold_historical.csv', parse_dates=['timestamp'])
+        df = pd.read_csv("data/mcx_gold_historical.csv", parse_dates=["timestamp"])
         print(f"✅ Loaded {len(df)} records")
         print(f"   Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
         print(f"   Price range: ₹{df['close'].min():.2f} - ₹{df['close'].max():.2f}")
@@ -170,14 +162,14 @@ def train_ppo_agent():
         print("⚠️ Run: python download_gold_data.py first to get real data")
         print("   Or training will use sample data (unrealistic results)")
 
-        dates = pd.date_range(start='2023-01-01', periods=1000, freq='D')
+        dates = pd.date_range(start="2023-01-01", periods=1000, freq="D")
         df = pd.DataFrame(
             {
-                'timestamp': dates,
-                'open': np.random.uniform(6000, 7000, 1000),
-                'high': np.random.uniform(6100, 7100, 1000),
-                'low': np.random.uniform(5900, 6900, 1000),
-                'close': np.random.uniform(6000, 7000, 1000),
+                "timestamp": dates,
+                "open": np.random.uniform(6000, 7000, 1000),
+                "high": np.random.uniform(6100, 7100, 1000),
+                "low": np.random.uniform(5900, 6900, 1000),
+                "close": np.random.uniform(6000, 7000, 1000),
             }
         )
         print("✅ Created sample data (for testing only)")
@@ -187,14 +179,14 @@ def train_ppo_agent():
     lstm_model = GoldLSTMModel(lookback=60, features=4)
 
     try:
-        lstm_model.load('models/lstm_consolidated.h5')
+        lstm_model.load("models/lstm_consolidated.h5")
         print("✅ LSTM model loaded")
     except Exception:
         print("⚠️ LSTM model not found. Training...")
         X_train, y_train, X_test, y_test = lstm_model.prepare_data(df)
         lstm_model.build_model()
         lstm_model.train(X_train, y_train, epochs=20, batch_size=32)
-        lstm_model.save('models/lstm_consolidated.h5')
+        lstm_model.save("models/lstm_consolidated.h5")
         print("✅ LSTM model trained and saved")
 
     if lstm_model.model is None:
@@ -211,7 +203,7 @@ def train_ppo_agent():
     print(f"   Training episodes: {len(train_df)}")
     print(f"   Testing episodes: {len(test_df)}")
 
-    os.makedirs('logs', exist_ok=True)
+    os.makedirs("logs", exist_ok=True)
 
     env = GoldTradingEnv(
         df=train_df,
@@ -221,7 +213,7 @@ def train_ppo_agent():
         slippage=10,
     )
 
-    monitored_env = Monitor(env, filename='./logs/training_monitor.csv')
+    monitored_env = Monitor(env, filename="./logs/training_monitor.csv")
     vec_env = DummyVecEnv([lambda: monitored_env])
 
     # Step 4: Create and train PPO agent
@@ -250,7 +242,7 @@ def train_ppo_agent():
         lstm_model=lstm_model,
         initial_capital=100000,
     )
-    test_monitored_env = Monitor(test_env, filename='./logs/test_monitor.csv')
+    test_monitored_env = Monitor(test_env, filename="./logs/test_monitor.csv")
     test_vec_env = DummyVecEnv([lambda: test_monitored_env])
     agent.env = test_vec_env
 
@@ -281,13 +273,19 @@ def train_ppo_agent():
         print("=" * 60)
 
         print("\n✅ Blueprint Validation:")
-        sharpe_pass = metrics['sharpe_ratio'] > 1.2
-        dd_pass = metrics['max_drawdown'] > -10
-        wr_pass = metrics['win_rate'] > 45
+        sharpe_pass = metrics["sharpe_ratio"] > 1.2
+        dd_pass = metrics["max_drawdown"] > -10
+        wr_pass = metrics["win_rate"] > 45
 
-        print(f"   Sharpe > 1.2: {'✅ PASS' if sharpe_pass else '❌ FAIL'} ({metrics['sharpe_ratio']:.2f})")
-        print(f"   Max DD < -10%: {'✅ PASS' if dd_pass else '❌ FAIL'} ({metrics['max_drawdown']:.2f}%)")
-        print(f"   Win Rate > 45%: {'✅ PASS' if wr_pass else '❌ FAIL'} ({metrics['win_rate']:.2f}%)")
+        print(
+            f"   Sharpe > 1.2: {'✅ PASS' if sharpe_pass else '❌ FAIL'} ({metrics['sharpe_ratio']:.2f})"
+        )
+        print(
+            f"   Max DD < -10%: {'✅ PASS' if dd_pass else '❌ FAIL'} ({metrics['max_drawdown']:.2f}%)"
+        )
+        print(
+            f"   Win Rate > 45%: {'✅ PASS' if wr_pass else '❌ FAIL'} ({metrics['win_rate']:.2f}%)"
+        )
 
         if sharpe_pass and dd_pass and wr_pass:
             print("\n🎉 ALL VALIDATION GATES PASSED!")
@@ -305,7 +303,7 @@ def train_ppo_agent():
 
     # Step 8: Save agent
     print("\n💾 Step 8: Saving PPO agent...")
-    agent.save('./models/ppo_gold_agent')
+    agent.save("./models/ppo_gold_agent")
 
     # Step 9: Plot training progress
     print("\n📊 Step 9: Generating training plots...")
@@ -317,63 +315,41 @@ def train_ppo_agent():
         print("   Try increasing total_timesteps to at least 20000")
 
 
-def plot_training_progress(episode_rewards: List[float]):
-    """Plot training progress"""
-    if len(episode_rewards) == 0:
-        print("⚠️ No episode rewards to plot")
+def plot_training_progress(episode_rewards: list[float]):
+    """Institutional standard plotting for PPO training progress"""
+    if not episode_rewards:
+        print("⚠️ No rewards found to plot.")
         return
 
-    print(f"📊 Plotting {len(episode_rewards)} episodes...")
+    # Use plt.subplots to define the scope of ax1 and ax2
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12))
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8))
+    # Plot 1: Raw Episode Rewards
+    ax1.plot(episode_rewards, alpha=0.3, color="blue", label="Raw Reward")
 
-    ax1.plot(episode_rewards, alpha=0.6, label='Episode Reward', linewidth=1)
-
-    if len(episode_rewards) >= 10:
-        window = min(10, len(episode_rewards))
+    # Calculate and plot Moving Average
+    window = 50
+    if len(episode_rewards) >= window:
         moving_avg = pd.Series(episode_rewards).rolling(window=window).mean()
-        ax1.plot(moving_avg, linewidth=2, label=f'{window}-Episode Moving Avg', color='red')
+        ax1.plot(moving_avg, linewidth=2, color="red", label=f"{window}-Ep Moving Avg")
 
-    ax1.set_xlabel('Episode')
-    ax1.set_ylabel('Reward')
-    ax1.set_title('PPO Training Progress - Episode Rewards')
+    ax1.set_xlabel("Episode")
+    ax1.set_ylabel("Reward")
+    ax1.set_title("PPO Training Progress - Episode Rewards")
     ax1.legend()
     ax1.grid(True, alpha=0.3)
-    ax1.axhline(y=0, color='black', linestyle='--', alpha=0.3)
 
+    # Plot 2: Cumulative Average Reward
     cumulative_avg = pd.Series(episode_rewards).expanding().mean()
-    ax2.plot(cumulative_avg, linewidth=2, color='green')
-    ax2.set_xlabel('Episode')
-    ax2.set_ylabel('Cumulative Average Reward')
-    ax2.set_title('Cumulative Average Reward Over Time')
+    ax2.plot(cumulative_avg, linewidth=2, color="green")
+    ax2.set_xlabel("Episode")
+    ax2.set_ylabel("Cumulative Average Reward")
+    ax2.set_title("Cumulative Average Reward Over Time")
     ax2.grid(True, alpha=0.3)
-    ax2.axhline(y=0, color='black', linestyle='--', alpha=0.3)
-
-    stats_text = (
-        f'Episodes: {len(episode_rewards)}\n'
-        f'Mean: {np.mean(episode_rewards):.2f}\n'
-        f'Std: {np.std(episode_rewards):.2f}\n'
-        f'Min: {np.min(episode_rewards):.2f}\n'
-        f'Max: {np.max(episode_rewards):.2f}'
-    )
-
-    ax2.text(
-        0.02,
-        0.98,
-        stats_text,
-        transform=ax2.transAxes,
-        verticalalignment='top',
-        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5),
-    )
 
     plt.tight_layout()
-    plt.savefig('ppo_training_progress.png', dpi=150)
-    print("✅ Training plot saved: ppo_training_progress.png")
-
-    try:
-        plt.show()
-    except Exception:
-        print("   (Plot saved but cannot display - may be running in headless mode)")
+    plt.savefig("logs/training_progress.png")
+    print("📈 Progress plot saved to logs/training_progress.png")
 
 
 if __name__ == "__main__":
@@ -384,44 +360,10 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n\n❌ ERROR: {str(e)}")
         import traceback
+
         traceback.print_exc()
 
-def plot_training_progress(episode_rewards):
-    """Plot training progress"""
-    import matplotlib.pyplot as plt
-    
-    if len(episode_rewards) == 0:
-        print("⚠️ No episode rewards to plot")
-        return
-    
-    # Create figure with 2 subplots
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8))
-    
-    # Plot 1: Episode rewards
-    ax1.plot(episode_rewards, alpha=0.6, label='Episode Reward')
-    
-    # Add moving average
-    if len(episode_rewards) > 50:
-        window = 50
-        moving_avg = pd.Series(episode_rewards).rolling(window=window).mean()
-        ax1.plot(moving_avg, linewidth=2, label=f'{window}-Episode Moving Avg', color='red')
-    
-    ax1.set_xlabel('Episode')
-    ax1.set_ylabel('Reward')
-    ax1.set_title('PPO Training Progress - Episode Rewards')
-    ax1.legend()
-    ax1.grid(True, alpha=0.3)
-    
-    # Plot 2: Cumulative average reward
-    cumulative_avg = pd.Series(episode_rewards).expanding().mean()
-    ax2.plot(cumulative_avg, linewidth=2, color='green')
-    ax2.set_xlabel('Episode')
-    ax2.set_ylabel('Cumulative Average Reward')
-    ax2.set_title('Cumulative Average Reward Over Time')
-    ax2.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    plt.savefig('ppo_training_progress.png', dpi=150)
+        pass  # Removed broken plotting code from exception block
     print("📊 Training plot saved: ppo_training_progress.png")
     plt.show()
 
@@ -434,4 +376,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n\n❌ ERROR: {str(e)}")
         import traceback
+
         traceback.print_exc()

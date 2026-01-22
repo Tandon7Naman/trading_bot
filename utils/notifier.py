@@ -1,16 +1,18 @@
-import asyncio
 from telegram import Bot
+
 from config.settings import TELEGRAM_CONFIG
+
 
 class TelegramNotifier:
     """Protocol 5.3: Real-time trade and system alerts."""
+
     _bot = None
 
     @staticmethod
     def get_bot():
-        if TelegramNotifier._bot is None and TELEGRAM_CONFIG['enabled']:
+        if TelegramNotifier._bot is None and TELEGRAM_CONFIG["enabled"]:
             # Using the token from your .env via settings
-            TelegramNotifier._bot = Bot(token=TELEGRAM_CONFIG['bot_token'])
+            TelegramNotifier._bot = Bot(token=TELEGRAM_CONFIG["bot_token"])
         return TelegramNotifier._bot
 
     @staticmethod
@@ -18,7 +20,9 @@ class TelegramNotifier:
         bot = TelegramNotifier.get_bot()
         if bot:
             try:
-                await bot.send_message(chat_id=TELEGRAM_CONFIG['chat_id'], text=text, parse_mode='Markdown')
+                await bot.send_message(
+                    chat_id=TELEGRAM_CONFIG["chat_id"], text=text, parse_mode="Markdown"
+                )
             except Exception as e:
                 print(f"   ⚠️ TELEGRAM ERROR: {e}")
 

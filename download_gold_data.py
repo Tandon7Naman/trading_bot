@@ -21,7 +21,7 @@ def download_gold_data():
     end_date = datetime.now()
     start_date = end_date - timedelta(days=1095)
 
-    print(f"\n📈 Fetching data...")
+    print("\n📈 Fetching data...")
     print(f"   Ticker: {ticker} (COMEX Gold Futures)")
     print(f"   Period: {start_date.date()} to {end_date.date()}")
     print("   Interval: Daily")
@@ -32,7 +32,7 @@ def download_gold_data():
             ticker,
             start=start_date,
             end=end_date,
-            interval='1d',
+            interval="1d",
             progress=False,
             auto_adjust=True,
         )
@@ -46,12 +46,12 @@ def download_gold_data():
         data = data.reset_index()
 
         df = pd.DataFrame()
-        df['timestamp'] = pd.to_datetime(data['Date'] if 'Date' in data.columns else data.index)
-        df['open'] = data['Open'].values
-        df['high'] = data['High'].values
-        df['low'] = data['Low'].values
-        df['close'] = data['Close'].values
-        df['volume'] = data['Volume'].values if 'Volume' in data.columns else 0
+        df["timestamp"] = pd.to_datetime(data["Date"] if "Date" in data.columns else data.index)
+        df["open"] = data["Open"].values
+        df["high"] = data["High"].values
+        df["low"] = data["Low"].values
+        df["close"] = data["Close"].values
+        df["volume"] = data["Volume"].values if "Volume" in data.columns else 0
 
         df = df.dropna()
 
@@ -74,17 +74,17 @@ def download_gold_data():
         print(f"   Conversion factor: {conversion_factor:.4f}")
         print(f"   USD/INR rate: {USD_TO_INR}")
 
-        for col in ['open', 'high', 'low', 'close']:
+        for col in ["open", "high", "low", "close"]:
             df[col] = df[col] * conversion_factor
 
-        print(f"\n📊 Converted Data Summary:")
+        print("\n📊 Converted Data Summary:")
         print(f"   Records: {len(df)}")
         print(f"   Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
         print(f"   Price range: ₹{df['close'].min():.2f} - ₹{df['close'].max():.2f}")
         print(f"   Latest price: ₹{df['close'].iloc[-1]:.2f} ({df['timestamp'].iloc[-1].date()})")
 
-        os.makedirs('data', exist_ok=True)
-        filepath = 'data/mcx_gold_historical.csv'
+        os.makedirs("data", exist_ok=True)
+        filepath = "data/mcx_gold_historical.csv"
         df.to_csv(filepath, index=False)
 
         print("\n✅ Data saved successfully!")

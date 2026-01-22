@@ -4,12 +4,10 @@ Connects to Alpaca API for paper trading.
 """
 
 import logging
-from datetime import datetime
-from typing import Dict, Optional, List
-from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import MarketOrderRequest
-from alpaca.trading.enums import OrderSide, TimeInForce
 
+from alpaca.trading.client import TradingClient
+from alpaca.trading.enums import OrderSide, TimeInForce
+from alpaca.trading.requests import MarketOrderRequest
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +15,7 @@ logger = logging.getLogger(__name__)
 class AlpacaBroker:
     """
     Alpaca paper trading broker.
-    
+
     Usage:
         broker = AlpacaBroker(api_key, secret_key)
         broker.place_order("GLD", "buy", 1.0)
@@ -28,7 +26,7 @@ class AlpacaBroker:
     def __init__(self, api_key: str, secret_key: str, paper: bool = True):
         """
         Initialize Alpaca trading client.
-        
+
         api_key: Your Alpaca API Key
         secret_key: Your Alpaca Secret Key
         paper: True for paper trading, False for live
@@ -36,13 +34,9 @@ class AlpacaBroker:
         self.api_key = api_key
         self.secret_key = secret_key
         self.paper = paper
-        
+
         try:
-            self.client = TradingClient(
-                api_key=api_key,
-                secret_key=secret_key,
-                paper=paper
-            )
+            self.client = TradingClient(api_key=api_key, secret_key=secret_key, paper=paper)
             logger.info(f"✅ Connected to Alpaca ({'Paper' if paper else 'Live'})")
         except Exception as e:
             logger.error(f"❌ Failed to connect to Alpaca: {e}")
@@ -58,34 +52,31 @@ class AlpacaBroker:
         side: str,
         qty: float,
         order_type: str = "market",
-    ) -> Dict:
+    ) -> dict:
         """
         Place a market order on Alpaca.
-        
+
         symbol: Stock symbol (e.g., "GLD", "AAPL")
         side: "buy" or "sell"
         qty: Quantity of shares
         order_type: "market" or "limit" (we use market for simplicity)
-        
+
         Returns: Order details dict
         """
         try:
             side_enum = OrderSide.BUY if side.lower() == "buy" else OrderSide.SELL
-            
+
             order_data = MarketOrderRequest(
-                symbol=symbol,
-                qty=qty,
-                side=side_enum,
-                time_in_force=TimeInForce.DAY
+                symbol=symbol, qty=qty, side=side_enum, time_in_force=TimeInForce.DAY
             )
-            
+
             order = self.client.submit_order(order_data)
-            
+
             logger.info(
                 f"✅ Order placed: {side.upper()} {qty} {symbol} "
                 f"@ {order.created_at} | Order ID: {order.id}"
             )
-            
+
             return {
                 "order_id": order.id,
                 "symbol": order.symbol,
@@ -100,24 +91,24 @@ class AlpacaBroker:
             logger.error(f"❌ Order placement failed: {e}")
             raise
 
-    def close_position(self, symbol: str) -> Optional[Dict]:
+    def close_position(self, symbol: str) -> dict | None:
         """
         Close all positions for a symbol.
-        
+
         Returns: Closing order details or None if no position
         """
         try:
             position = self.client.get_open_position(symbol)
-            
+
             if position is None:
                 logger.warning(f"⚠️  No open position for {symbol}")
                 return None
-            
+
             # Close the position
             order = self.client.close_position(symbol)
-            
+
             logger.info(f"✅ Position closed: {symbol} | Order ID: {order.id}")
-            
+
             return {
                 "order_id": order.id,
                 "symbol": order.symbol,
@@ -133,7 +124,7 @@ class AlpacaBroker:
     # Account Information
     # ------------------------------------------------------------------
 
-    def get_account(self) -> Dict:
+    def get_account(self) -> dict:
         """Get account details: cash, equity, buying power, etc."""
         try:
             account = self.client.get_account()
@@ -154,28 +145,30 @@ class AlpacaBroker:
                 "status": "error",
             }
 
-    def get_positions(self) -> List[Dict]:
+    def get_positions(self) -> list[dict]:
         """Get all open positions."""
         try:
             positions = self.client.get_all_positions()
             result = []
             for pos in positions:
-                result.append({
-                    "symbol": pos.symbol,
-                    "qty": float(pos.qty),
-                    "side": pos.side.value,
-                    "avg_fill_price": float(pos.avg_fill_price),
-                    "current_price": float(pos.current_price) if pos.current_price else None,
-                    "market_value": float(pos.market_value),
-                    "unrealized_pl": float(pos.unrealized_pl),
-                    "unrealized_plpc": float(pos.unrealized_plpc),
-                })
+                result.append(
+                    {
+                        "symbol": pos.symbol,
+                        "qty": float(pos.qty),
+                        "side": pos.side.value,
+                        "avg_fill_price": float(pos.avg_fill_price),
+                        "current_price": float(pos.current_price) if pos.current_price else None,
+                        "market_value": float(pos.market_value),
+                        "unrealized_pl": float(pos.unrealized_pl),
+                        "unrealized_plpc": float(pos.unrealized_plpc),
+                    }
+                )
             return result
         except Exception as e:
             logger.error(f"❌ Failed to get positions: {e}")
             return []
 
-    def get_position(self, symbol: str) -> Optional[Dict]:
+    def get_position(self, symbol: str) -> dict | None:
         """Get a specific position. Returns None if no position exists."""
         try:
             pos = self.client.get_open_position(symbol)
@@ -191,26 +184,28 @@ class AlpacaBroker:
                 "unrealized_pl": float(pos.unrealized_pl) if pos.unrealized_pl else 0,
                 "unrealized_plpc": float(pos.unrealized_plpc) if pos.unrealized_plpc else 0,
             }
-        except Exception as e:
+        except Exception:
             # Position doesn't exist - this is normal before first trade
             return None
 
-    def get_orders(self, status: str = "all") -> List[Dict]:
+    def get_orders(self, status: str = "all") -> list[dict]:
         """Get all orders. status: 'open', 'closed', 'all'"""
         try:
             orders = self.client.get_orders(status=status)
             result = []
             for order in orders:
-                result.append({
-                    "order_id": order.id,
-                    "symbol": order.symbol,
-                    "qty": order.qty,
-                    "side": order.side.value,
-                    "status": order.status,
-                    "created_at": order.created_at,
-                    "filled_qty": order.filled_qty,
-                    "filled_avg_price": order.filled_avg_price,
-                })
+                result.append(
+                    {
+                        "order_id": order.id,
+                        "symbol": order.symbol,
+                        "qty": order.qty,
+                        "side": order.side.value,
+                        "status": order.status,
+                        "created_at": order.created_at,
+                        "filled_qty": order.filled_qty,
+                        "filled_avg_price": order.filled_avg_price,
+                    }
+                )
             return result
         except Exception as e:
             logger.error(f"❌ Failed to get orders: {e}")
@@ -220,13 +215,13 @@ class AlpacaBroker:
     # Reporting
     # ------------------------------------------------------------------
 
-    def summary(self) -> Dict:
+    def summary(self) -> dict:
         """Get account summary for printing."""
         account = self.get_account()
         positions = self.get_positions()
-        
+
         total_pl = sum(p.get("unrealized_pl", 0) for p in positions)
-        
+
         return {
             "cash": account.get("cash", 0),
             "equity": account.get("equity", 0),

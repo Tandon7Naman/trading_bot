@@ -6,27 +6,30 @@ Expected final columns:
 """
 
 import os
+
 import pandas as pd
 
-RAW_PATH = "raw/MCX_gold_raw.csv"      # from Investing.com / Kaggle
+RAW_PATH = "raw/MCX_gold_raw.csv"  # from Investing.com / Kaggle
 OUT_PATH = "data/MCX_gold_daily.csv"
 SYMBOL = "MCX:GOLD"
+
 
 def convert_volume(vol_str):
     """Converts volume strings like '21.65K' or '1.2M' to float."""
     if isinstance(vol_str, (int, float)):
         return float(vol_str)
     vol_str = str(vol_str).strip().upper()
-    if not vol_str or vol_str == '-':
+    if not vol_str or vol_str == "-":
         return 0.0
-    
-    if vol_str.endswith('K'):
+
+    if vol_str.endswith("K"):
         return float(vol_str[:-1]) * 1_000
-    if vol_str.endswith('M'):
+    if vol_str.endswith("M"):
         return float(vol_str[:-1]) * 1_000_000
-    if vol_str.endswith('B'):
+    if vol_str.endswith("B"):
         return float(vol_str[:-1]) * 1_000_000_000
     return float(vol_str)
+
 
 def main():
     os.makedirs("data", exist_ok=True)
@@ -41,7 +44,7 @@ def main():
         "Open": "open",
         "High": "high",
         "Low": "low",
-        "Price": "close",       # sometimes 'Close' or 'Last'
+        "Price": "close",  # sometimes 'Close' or 'Last'
         "Vol.": "volume",
     }
     df = df.rename(columns=col_map)
@@ -53,19 +56,19 @@ def main():
 
     # 1. Clean and convert numeric columns
     for col in ["open", "high", "low", "close"]:
-        if df[col].dtype == 'object':
-            df[col] = df[col].str.replace(',', '', regex=False)
-        df[col] = pd.to_numeric(df[col], errors='coerce')
+        if df[col].dtype == "object":
+            df[col] = df[col].str.replace(",", "", regex=False)
+        df[col] = pd.to_numeric(df[col], errors="coerce")
 
     # 2. Clean and convert volume
-    if 'volume' in df.columns and df['volume'].dtype == 'object':
-        df['volume'] = df['volume'].apply(convert_volume)
-    
+    if "volume" in df.columns and df["volume"].dtype == "object":
+        df["volume"] = df["volume"].apply(convert_volume)
+
     # 3. Parse date and sort
     df["timestamp"] = pd.to_datetime(
         df["timestamp"],
-        format="%d-%m-%Y",   # <-- IMPORTANT: day-month-year
-        errors="coerce"
+        format="%d-%m-%Y",  # <-- IMPORTANT: day-month-year
+        errors="coerce",
     )
 
     # --- Final Processing ---
@@ -93,6 +96,7 @@ def main():
     print("Columns:", df.columns.tolist())
     print("First row:\n", df.iloc[0])
     print("Last row:\n", df.iloc[-1])
+
 
 if __name__ == "__main__":
     main()

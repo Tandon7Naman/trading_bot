@@ -2,16 +2,17 @@
 Gold Trading Bot Launcher
 Automatically activates venv and runs bot
 """
-import sys
+
 import os
-from pathlib import Path
 import subprocess
+import sys
+from pathlib import Path
 
 # Project root
 project_root = Path(__file__).parent
 
 # Virtual environment python
-venv_python = project_root / '.venv' / 'Scripts' / 'python.exe'
+venv_python = project_root / ".venv" / "Scripts" / "python.exe"
 
 if not venv_python.exists():
     print("❌ Virtual environment not found!")
@@ -25,8 +26,8 @@ print("🚀 STARTING GOLD TRADING BOT (with venv)")
 print("=" * 70)
 
 # Change to src directory
-os.chdir(project_root / 'src')
+os.chdir(project_root / "src")
 
 # Run with venv python
-result = subprocess.run([str(venv_python), 'dual_market_bot.py'])
+result = subprocess.run([str(venv_python), "dual_market_bot.py"])
 sys.exit(result.returncode)

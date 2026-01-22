@@ -1,7 +1,9 @@
 import logging
 
+
 class RiskManager:
     """Professional risk management following Kelly Criterion and practical limits."""
+
     def __init__(self, account_size, max_loss_pct=2, max_drawdown_pct=5):
         self.account_size = account_size
         self.max_loss_pct = max_loss_pct
@@ -11,7 +13,6 @@ class RiskManager:
         self.daily_loss = 0
 
     def calculate_position_size(self, entry_price, stop_loss_price, win_rate=0.55):
-        import math
         risk_per_trade = self.account_size * 0.02
         risk_per_share = abs(entry_price - stop_loss_price)
         if risk_per_share == 0:
@@ -29,6 +30,7 @@ class RiskManager:
             logging.error("Daily loss limit (5%) reached - HALT TRADING")
             return False
         return True
+
 
 if __name__ == "__main__":
     rm = RiskManager(100000)

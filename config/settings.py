@@ -1,5 +1,5 @@
 import os
-import sys
+
 from dotenv import load_dotenv
 
 # 1. Load Environment Variables
@@ -27,26 +27,26 @@ ASSET_CONFIG = {
         "max_vol": 100.0,
         "vol_step": 0.01,
         # 🟢 MISSING LINE RESTORED:
-        "data_file": "data/XAUUSD_M1.csv"
+        "data_file": "data/XAUUSD_M1.csv",
     }
 }
 
 # --- 🟢 MISSING COMPONENT RESTORED 🟢 ---
-ENABLED_MARKETS = ["XAUUSD"] 
+ENABLED_MARKETS = ["XAUUSD"]
 # ----------------------------------------
 
 # --- BROKER CONFIGURATION ---
 BINANCE_CONFIG = {
     "api_key": os.getenv("BINANCE_API_KEY"),
     "api_secret": os.getenv("BINANCE_SECRET"),
-    "testnet": True
+    "testnet": True,
 }
 
 # --- TELEGRAM CONFIG ---
 TELEGRAM_CONFIG = {
-    "enabled": True if os.getenv("TELEGRAM_BOT_TOKEN") else False,
+    "enabled": bool(os.getenv("TELEGRAM_BOT_TOKEN")),
     "bot_token": os.getenv("TELEGRAM_BOT_TOKEN"),
-    "chat_id": os.getenv("TELEGRAM_CHAT_ID")
+    "chat_id": os.getenv("TELEGRAM_CHAT_ID"),
 }
 
 # --- NEWS CONFIG ---
@@ -55,20 +55,14 @@ NEWS_CONFIG = {
     "api_key": os.getenv("NEWS_API_KEY"),
     "sources": "bloomberg,reuters,cnbc,financial-times",
     "cache_seconds": 3600,
-    "sentiment_threshold": 0.5
+    "sentiment_threshold": 0.5,
 }
 
 # --- STRATEGY CONFIG ---
 STRATEGY_CONFIG = {
-    "cooldown_minutes": 240, 
+    "cooldown_minutes": 240,
 }
 
-JOURNAL_CONFIG = {
-    "enabled": True,
-    "type": "CSV" 
-}
+JOURNAL_CONFIG = {"enabled": True, "type": "CSV"}
 
-EXECUTION_CONFIG = {
-    "max_slippage_pct": 0.05,
-    "max_notional_value": 500_000
-}
+EXECUTION_CONFIG = {"max_slippage_pct": 0.05, "max_notional_value": 500_000}

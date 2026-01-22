@@ -4,46 +4,50 @@ Gold Trading Bot - Production Version
 Uses proven rule-based technical analysis strategy
 """
 
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
+import json
 import logging
 import os
-from dotenv import load_dotenv
 import sys
+from datetime import datetime
 
+import pandas as pd
+from dotenv import load_dotenv
 
-# Import custom modules
-from update_gld_data import main as update_gld_data
-from fetch_market_news import main as fetch_news
 from backtest_strategy_rulebased import RuleBasedBacktestEngine
+from fetch_market_news import main as fetch_news
 from paper_trading import PaperTradingEngine
-
+from src.currency_monitor import CurrencyMonitor
+from src.economic_calendar_monitor import EconomicCalendarMonitor
+from src.fiscal_policy_loader import FiscalPolicyLoader
+from src.geopolitical_risk_monitor import GeopoliticalRiskMonitor
+from src.global_cues_monitor import GlobalCuesMonitor
+from src.pivot_level_calculator import PivotLevelCalculator
+from src.pretrade_gateway import PreTradeGateway
+from src.risk_manager import RiskManager
+from src.signal_confluence_filter import SignalConfluenceFilter
+from update_gld_data import main as update_gld_data
 from utils.notifier import TelegramNotifier
 
-# ========== NEW IMPORTS FOR GATEWAY INTEGRATION ==========
-from src.pretrade_gateway import PreTradeGateway
-from src.fiscal_policy_loader import FiscalPolicyLoader
-from src.global_cues_monitor import GlobalCuesMonitor
-from src.economic_calendar_monitor import EconomicCalendarMonitor
-from src.currency_monitor import CurrencyMonitor
-from src.pivot_level_calculator import PivotLevelCalculator
-from src.signal_confluence_filter import SignalConfluenceFilter
-from src.geopolitical_risk_monitor import GeopoliticalRiskMonitor
-from src.risk_manager import RiskManager
-# ========================================================
+# Initialize the institutional logger
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler("logs/trading_bot.log"), logging.StreamHandler()],
+)
+logger = logging.getLogger("GoldTradingBot")
 
 load_dotenv()
 
 logging.basicConfig(
-    filename='logs/main_bot.log',
+    filename="logs/main_bot.log",
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(levelname)s - %(message)s",
 )
+
 
 class GoldTradingBot:
     """Main bot orchestrator with rule-based strategy"""
-    
+
     def __init__(self, account_size: float = 100000, *args, **kwargs):
         """
         Initialize bot with integrated gateway modules.
@@ -53,18 +57,19 @@ class GoldTradingBot:
             self.telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
             self.telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
             self.paper_trading_api_choice = os.getenv("PAPER_TRADING_API_CHOICE", "paper")
-            self.paper_trading_initial_capital = float(os.getenv("PAPER_TRADING_INITIAL_CAPITAL", "100000"))
+            self.paper_trading_initial_capital = float(
+                os.getenv("PAPER_TRADING_INITIAL_CAPITAL", "100000")
+            )
             self.paper_trading_trade_quantity = int(os.getenv("PAPER_TRADING_TRADE_QUANTITY", "10"))
             self.backtest_tp_percent = float(os.getenv("BACKTEST_TP_PERCENT", "2.0"))
             self.backtest_sl_percent = float(os.getenv("BACKTEST_SL_PERCENT", "1.0"))
-
 
             # No longer using self.alerts; use TelegramNotifier directly
 
             # Initialize paper trading
             self.paper_trading = PaperTradingEngine(
                 api_choice=self.paper_trading_api_choice,
-                initial_capital=self.paper_trading_initial_capital
+                initial_capital=self.paper_trading_initial_capital,
             )
 
             # ========== NEW: Initialize Gateway Modules ==========
@@ -93,26 +98,27 @@ class GoldTradingBot:
         """Update GLD and news data"""
         try:
             print("[*] Updating data...")
-            
+
             # Update GLD data
             print("  [*] Updating GLD data...")
             update_gld_data()
-            
+
             # Fetch news (optional)
             print("  [*] Fetching market news...")
             try:
                 fetch_news()
             except Exception as e:
                 logging.warning(f"News fetch failed: {str(e)}")
-            
+
             logging.info("Data updated successfully")
             print("[+] Data updated successfully")
             return True
-            
+
         except Exception as e:
             logging.error(f"Error updating data: {str(e)}")
             # Async notification for error
             import asyncio
+
             asyncio.run(TelegramNotifier.send_message(f"Data update failed: {str(e)}"))
             print(f"[-] Error: {str(e)}")
             return False
@@ -121,34 +127,34 @@ class GoldTradingBot:
         """Run backtest and get live trading signals"""
         try:
             print("[*] Running backtest analysis...")
-            
-            df = pd.read_csv('data/gld_data.csv')
-            
+
+            df = pd.read_csv("data/gld_data.csv")
+
             engine = RuleBasedBacktestEngine(
                 initial_capital=self.paper_trading_initial_capital,
                 tp_percent=self.backtest_tp_percent,
-                sl_percent=self.backtest_sl_percent
+                sl_percent=self.backtest_sl_percent,
             )
-            
+
             # Generate signals
             df = engine.generate_signals(df)
-            
+
             # Get latest signal
-            latest_signal = df['Signal'].iloc[-1] if len(df) > 0 else 0
-            latest_close = df['close'].iloc[-1] if len(df) > 0 else 0
-            latest_ema20 = df['EMA_20'].iloc[-1] if 'EMA_20' in df.columns else 0
-            latest_ema50 = df['EMA_50'].iloc[-1] if 'EMA_50' in df.columns else 0
-            latest_rsi = df['RSI'].iloc[-1] if len(df) > 0 else 0
-            
+            latest_signal = df["Signal"].iloc[-1] if len(df) > 0 else 0
+            latest_close = df["close"].iloc[-1] if len(df) > 0 else 0
+            latest_ema20 = df["EMA_20"].iloc[-1] if "EMA_20" in df.columns else 0
+            latest_ema50 = df["EMA_50"].iloc[-1] if "EMA_50" in df.columns else 0
+            latest_rsi = df["RSI"].iloc[-1] if len(df) > 0 else 0
+
             signal_data = {
-                'timestamp': datetime.now().isoformat(),
-                'close': latest_close,
-                'signal': int(latest_signal),
-                'ema20': latest_ema20,
-                'ema50': latest_ema50,
-                'rsi': latest_rsi
+                "timestamp": datetime.now().isoformat(),
+                "close": latest_close,
+                "signal": int(latest_signal),
+                "ema20": latest_ema20,
+                "ema50": latest_ema50,
+                "rsi": latest_rsi,
             }
-            
+
             if latest_signal == 1:
                 print(f"[+] BUY signal generated @ ₹{latest_close:.2f}")
                 logging.info(f"BUY signal: {latest_close}")
@@ -157,9 +163,9 @@ class GoldTradingBot:
                 logging.info(f"SELL signal: {latest_close}")
             else:
                 print(f"[*] No signal (neutral) @ ₹{latest_close:.2f}")
-            
+
             return signal_data
-            
+
         except Exception as e:
             logging.error(f"Error in backtest: {str(e)}")
             print(f"[-] Error: {str(e)}")
@@ -168,52 +174,59 @@ class GoldTradingBot:
     def execute_live_trade(self, signal_data):
         """Execute paper trade based on signal"""
         try:
-            if signal_data['signal'] == 0:
+            if signal_data["signal"] == 0:
                 print("[*] No signal - skipping trade")
                 return False
-            
-            symbol = 'GLD'
+
+            symbol = "GLD"
             quantity = self.paper_trading_trade_quantity
-            price = signal_data['close']
+            price = signal_data["close"]
             trade_id = f"BOT_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            
-            if signal_data['signal'] == 1:
+
+            if signal_data["signal"] == 1:
                 result = self.paper_trading.place_buy_order(symbol, quantity, price, trade_id)
                 if result:
                     msg = f"BUY {quantity} {symbol} @ ₹{price:.2f}"
                     import asyncio
-                    asyncio.run(TelegramNotifier.notify_trade(
-                        trade_type="BUY",
-                        price=price,
-                        size=quantity,
-                        sl=0,
-                        tp=0,
-                        sentiment="Rule-Based Signal"
-                    ))
+
+                    asyncio.run(
+                        TelegramNotifier.notify_trade(
+                            trade_type="BUY",
+                            price=price,
+                            size=quantity,
+                            sl=0,
+                            tp=0,
+                            sentiment="Rule-Based Signal",
+                        )
+                    )
                     print(f"[+] {msg}")
                     logging.info(msg)
-            
-            elif signal_data['signal'] == -1:
+
+            elif signal_data["signal"] == -1:
                 result = self.paper_trading.place_sell_order(symbol, quantity, price, trade_id)
                 if result:
                     msg = f"SELL {quantity} {symbol} @ ₹{price:.2f}"
                     import asyncio
-                    asyncio.run(TelegramNotifier.notify_trade(
-                        trade_type="SELL",
-                        price=price,
-                        size=quantity,
-                        sl=0,
-                        tp=0,
-                        sentiment="Rule-Based Signal"
-                    ))
+
+                    asyncio.run(
+                        TelegramNotifier.notify_trade(
+                            trade_type="SELL",
+                            price=price,
+                            size=quantity,
+                            sl=0,
+                            tp=0,
+                            sentiment="Rule-Based Signal",
+                        )
+                    )
                     print(f"[+] {msg}")
                     logging.info(msg)
-            
+
             return result
-            
+
         except Exception as e:
             logging.error(f"Error executing trade: {str(e)}")
             import asyncio
+
             asyncio.run(TelegramNotifier.send_message(f"Trade execution error: {str(e)}"))
             print(f"[-] Error: {str(e)}")
             return False
@@ -223,17 +236,18 @@ class GoldTradingBot:
         try:
             summary = self.paper_trading.get_account_summary()
             import asyncio
+
             asyncio.run(TelegramNotifier.send_message(f"Daily Summary: {summary}"))
-            
+
             # Save summary
-            os.makedirs('reports', exist_ok=True)
-            with open(f"reports/summary_{datetime.now().strftime('%Y%m%d')}.json", 'w') as f:
+            os.makedirs("reports", exist_ok=True)
+            with open(f"reports/summary_{datetime.now().strftime('%Y%m%d')}.json", "w") as f:
                 json.dump(summary, f, indent=2)
-            
+
             logging.info("Daily summary sent")
             print("[+] Daily summary sent via Telegram")
             return True
-            
+
         except Exception as e:
             logging.error(f"Error sending summary: {str(e)}")
             print(f"[-] Error: {str(e)}")
@@ -242,7 +256,7 @@ class GoldTradingBot:
     def run_full_cycle(self):
         """
         Main trading cycle with integrated pre-trade gateway.
-        
+
         Sequence:
         1. Update data (prices, indicators)
         2. Initialize PreTradeGateway (all 8 checks)
@@ -250,60 +264,60 @@ class GoldTradingBot:
         4. If NO-GO: Alert and skip trade execution
         5. Generate daily summary
         """
-        
-        logger.info("="*80)
+
+        logger.info("=" * 80)
         logger.info("STARTING FULL TRADING CYCLE WITH GATEWAY")
-        logger.info("="*80)
-        
+        logger.info("=" * 80)
+
         try:
-            # ========== PHASE 1: Update Market Data ========== 
+            # ========== PHASE 1: Update Market Data ==========
             logger.info("[1/5] Updating market data and indicators...")
             self.update_data()
             logger.info("✓ Market data updated")
-            
-            # ========== PHASE 2: Initialize Gateway ========== 
+
+            # ========== PHASE 2: Initialize Gateway ==========
             logger.info("[2/5] Initializing pre-trade gateway...")
             self.pretrade_gateway = self._initialize_gateway()
             logger.info("✓ Gateway initialized with 8 modules")
-            
-            # ========== PHASE 3: Run Gateway Checks ========== 
+
+            # ========== PHASE 3: Run Gateway Checks ==========
             logger.info("[3/5] Running unified pre-trade gateway checks...")
             go_ahead, gateway_ctx = self.pretrade_gateway.run_all_checks()
             self.gateway_context = gateway_ctx
-            
+
             # Gate decision
             if not go_ahead:
-                logger.error(f"❌ GATEWAY BLOCKED TRADE EXECUTION")
+                logger.error("❌ GATEWAY BLOCKED TRADE EXECUTION")
                 logger.error(f"   Failed checks: {gateway_ctx['checks_failed']}")
-                
+
                 # Alert stakeholders
                 self._alert_gateway_failure(gateway_ctx)
-                
+
                 # Still generate summary for auditing
                 self.generate_daily_summary(gateway_blocked=True)
-                
+
                 logger.info("Cycle completed (trades blocked by gateway)")
                 return
-            
+
             logger.info("✓ All gateway checks passed - TRADE EXECUTION APPROVED")
-            
-            # ========== PHASE 4: Generate Signals & Execute Trades ========== 
+
+            # ========== PHASE 4: Generate Signals & Execute Trades ==========
             logger.info("[4/5] Generating trading signals...")
             signals = self.generate_signals()
-            
+
             logger.info("[5/5] Executing trades with RiskManager...")
             self._execute_trades_with_risk(signals, gateway_ctx)
-            
+
             logger.info("✓ Trades executed successfully")
-            
-            # ========== PHASE 5: Daily Summary ========== 
+
+            # ========== PHASE 5: Daily Summary ==========
             logger.info("Generating daily summary...")
             self.generate_daily_summary(gateway_blocked=False)
-            
-            logger.info("="*80)
+
+            logger.info("=" * 80)
             logger.info("FULL CYCLE COMPLETED SUCCESSFULLY")
-            logger.info("="*80)
-            
+            logger.info("=" * 80)
+
         except Exception as e:
             logger.error(f"Fatal error in run_full_cycle: {e}", exc_info=True)
             raise
@@ -311,7 +325,7 @@ class GoldTradingBot:
     def _initialize_gateway(self) -> PreTradeGateway:
         """
         Initialize PreTradeGateway with all 8 modules.
-        
+
         Returns:
             PreTradeGateway: Fully initialized gateway instance
         """
@@ -329,45 +343,45 @@ class GoldTradingBot:
     def _execute_trades_with_risk(self, signals: list, gateway_ctx: dict):
         """
         Execute trades using RiskManager for position sizing and limits.
-        
+
         Args:
             signals: List of trading signals from signal generator
             gateway_ctx: Context from gateway checks (includes duty, bias, etc.)
         """
         duty = gateway_ctx["checks"]["fiscal_policy"]["duty_rate"]
         bias = gateway_ctx["checks"]["global_cues"]["bias"]
-        
-        logger.info(f"Executing trades - Session bias: {bias}, Duty: {duty*100:.1f}%")
-        
+
+        logger.info(f"Executing trades - Session bias: {bias}, Duty: {duty * 100:.1f}%")
+
         if not signals:
             logger.info("No signals generated. Skipping trade execution.")
             return
-        
+
         for signal in signals:
             try:
                 # Check daily loss limit before trade
                 if not self.risk_manager.check_daily_loss_limit(0):
                     logger.warning("Daily loss limit reached. Skipping further trades.")
                     break
-                
+
                 # Calculate position size using RiskManager
                 position = self.risk_manager.calculate_position_size(
                     entry_price=signal.get("entry", 0),
                     stop_loss_price=signal.get("stop_loss", 0),
                 )
-                
+
                 if position == 0:
                     logger.warning(f"Position size = 0 for signal {signal}. Skipping.")
                     continue
-                
+
                 logger.info(
                     f"Executing: Entry={signal.get('entry')}, "
                     f"SL={signal.get('stop_loss')}, Position={position}"
                 )
-                
+
                 # TODO: Replace with your actual broker API call
                 # result = self._place_order(signal, position, duty)
-                
+
             except Exception as e:
                 logger.error(f"Trade execution failed: {e}")
                 continue
@@ -375,28 +389,29 @@ class GoldTradingBot:
     def _alert_gateway_failure(self, gateway_ctx: dict):
         """
         Alert stakeholders when gateway blocks trade execution.
-        
+
         Args:
             gateway_ctx: Gateway context with failure details
         """
         failed_checks = gateway_ctx.get("checks_failed", [])
-        
+
         alert_msg = (
             f"\n⚠️ TRADING BOT ALERT: Gateway Execution Blocked\n"
             f"Timestamp: {gateway_ctx.get('timestamp')}\n"
             f"Failed Checks: {', '.join(failed_checks)}\n"
         )
-        
+
         logger.warning(alert_msg)
-        
+
         # Send Telegram alert for gateway failure
         import asyncio
+
         asyncio.run(TelegramNotifier.send_message(alert_msg))
 
     def generate_daily_summary(self, gateway_blocked: bool = False):
         """
         Generate daily summary with gateway context.
-        
+
         Args:
             gateway_blocked: Whether gateway blocked execution today
         """
@@ -404,15 +419,16 @@ class GoldTradingBot:
             "date": str(datetime.now().date()),
             "gateway_blocked": gateway_blocked,
         }
-        
+
         if self.gateway_context:
             summary["gateway_status"] = self.gateway_context.get("gateway_status", "UNKNOWN")
             summary["checks_passed"] = len(self.gateway_context.get("checks_passed", []))
             summary["checks_failed"] = self.gateway_context.get("checks_failed", [])
-        
+
         logger.info(f"Daily Summary: {summary}")
-        
+
         # TODO: Log to file, database, or external system
+
 
 def main():
     """Main entry point"""
@@ -424,6 +440,7 @@ def main():
         print(f"[-] Fatal error: {str(e)}")
         logging.error(f"Fatal error: {str(e)}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

@@ -1,9 +1,10 @@
-import os
 import logging
-from datetime import datetime
+import os
+
 
 class FiscalPolicyLoader:
     """Dynamically load and confirm import duty rates."""
+
     def __init__(self):
         self.current_duty = None
         self.last_update = None
@@ -11,7 +12,7 @@ class FiscalPolicyLoader:
         self.update_frequency_hours = 1
 
     def get_duty_from_env(self):
-        env_duty = os.getenv('CONFIRMED_DAILY_DUTY_RATE')
+        env_duty = os.getenv("CONFIRMED_DAILY_DUTY_RATE")
         if not env_duty:
             raise ValueError(
                 "Import duty rate not confirmed for today.\n"
@@ -35,6 +36,7 @@ class FiscalPolicyLoader:
             raise RuntimeError("Duty change detected. Halt trading until manual confirmation.")
         logging.info(f"Pre-market duty check passed: {duty * 100:.1f}%")
         return duty
+
 
 if __name__ == "__main__":
     loader = FiscalPolicyLoader()

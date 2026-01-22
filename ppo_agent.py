@@ -3,15 +3,12 @@ PPO Agent for Gold Trading - COMPLETELY FIXED
 Windows path issues, episode tracking, reward calculation
 """
 
-import json
-import os
 from datetime import datetime
 
 import numpy as np
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.evaluation import evaluate_policy
-from stable_baselines3.common.vec_env import DummyVecEnv
 
 
 class TradingCallback(BaseCallback):
@@ -93,7 +90,7 @@ class GoldPPOAgent:
 
         # Save final model
         self.model.save("./models/ppo_final")
-        print(f"\n💾 Saved: ./models/ppo_final.zip ({training_time/60:.1f} min)")
+        print(f"\n💾 Saved: ./models/ppo_final.zip ({training_time / 60:.1f} min)")
 
         return callback.episode_rewards
 

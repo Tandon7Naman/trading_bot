@@ -1,8 +1,10 @@
-import pandas as pd
-import asyncio
 import os
 from datetime import datetime
+
+import pandas as pd
+
 from utils.notifier import TelegramNotifier
+
 
 class PerformanceReporter:
     """Protocol 6.1: Daily Performance Auditing."""
@@ -18,10 +20,10 @@ class PerformanceReporter:
             return "⚠️ Trade journal is empty."
 
         # Clean PnL column (Remove $ and convert to float)
-        df['PnL_val'] = df['PnL'].replace('[\$,]', '', regex=True).astype(float)
+        df["PnL_val"] = df["PnL"].replace(r"[\$,]", "", regex=True).astype(float)
 
-        total_pnl = df['PnL_val'].sum()
-        win_rate = (len(df[df['PnL_val'] > 0]) / len(df)) * 100
+        total_pnl = df["PnL_val"].sum()
+        win_rate = (len(df[df["PnL_val"] > 0]) / len(df)) * 100
         total_trades = len(df)
         avg_trade = total_pnl / total_trades if total_trades > 0 else 0
 

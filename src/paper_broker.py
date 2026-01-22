@@ -10,15 +10,15 @@ Tracks:
 """
 
 from __future__ import annotations
-from dataclasses import dataclass, field
+
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, Optional, List
 
 
 @dataclass
 class PaperPosition:
     symbol: str
-    side: str            # "LONG" or "SHORT"
+    side: str  # "LONG" or "SHORT"
     quantity: float
     entry_price: float
     entry_time: datetime
@@ -27,13 +27,13 @@ class PaperPosition:
 @dataclass
 class PaperTrade:
     symbol: str
-    side: str            # "BUY" or "SELL"
+    side: str  # "BUY" or "SELL"
     quantity: float
     entry_price: float
-    exit_price: Optional[float]
+    exit_price: float | None
     entry_time: datetime
-    exit_time: Optional[datetime]
-    pnl: Optional[float]
+    exit_time: datetime | None
+    pnl: float | None
     reason: str
 
 
@@ -50,8 +50,8 @@ class PaperBroker:
     def __init__(self, initial_cash: float = 500000.0) -> None:
         self.initial_cash: float = float(initial_cash)
         self.cash: float = float(initial_cash)
-        self.positions: Dict[str, PaperPosition] = {}
-        self.trades: List[PaperTrade] = []
+        self.positions: dict[str, PaperPosition] = {}
+        self.trades: list[PaperTrade] = []
 
     # ------------------------------------------------------------------
     # Core API
@@ -63,7 +63,7 @@ class PaperBroker:
         side: str,
         quantity: float,
         price: float,
-        timestamp: Optional[datetime] = None,
+        timestamp: datetime | None = None,
     ) -> None:
         """
         Execute a market order at the given price.
@@ -97,8 +97,8 @@ class PaperBroker:
         symbol: str,
         price: float,
         reason: str,
-        timestamp: Optional[datetime] = None,
-    ) -> Optional[PaperTrade]:
+        timestamp: datetime | None = None,
+    ) -> PaperTrade | None:
         """
         Close existing position at price. Returns the created PaperTrade or None if no position.
         """
@@ -207,7 +207,7 @@ class PaperBroker:
     # Reporting
     # ------------------------------------------------------------------
 
-    def get_equity(self, mark_prices: Optional[Dict[str, float]] = None) -> float:
+    def get_equity(self, mark_prices: dict[str, float] | None = None) -> float:
         """
         Equity = cash + sum of unrealized P&L for all open positions.
         mark_prices: optional dict {symbol: last_price} for mark‑to‑market.
@@ -229,7 +229,7 @@ class PaperBroker:
     def get_realized_pnl(self) -> float:
         return sum(t.pnl for t in self.trades if t.pnl is not None)
 
-    def summary(self, mark_prices: Optional[Dict[str, float]] = None) -> Dict[str, float]:
+    def summary(self, mark_prices: dict[str, float] | None = None) -> dict[str, float]:
         """
         Return a simple summary dict of account status.
         """

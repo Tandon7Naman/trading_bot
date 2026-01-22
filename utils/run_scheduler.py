@@ -1,7 +1,10 @@
-import schedule
-import time
 import asyncio
+import time
+
+import schedule
+
 from utils.reporting import PerformanceReporter
+
 
 def run_scheduler():
     # Schedule the report for 17:00 every day

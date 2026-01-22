@@ -4,12 +4,12 @@ Train/Test Split and LSTM Retraining for MCX Gold
 """
 
 import os
+
 import numpy as np
-import pandas as pd
+from prepare_mcx_lstm_data import prepare_mcx_lstm_data
 
 from split_mcx_by_date import split_mcx_data_by_date
-from prepare_mcx_lstm_data import prepare_mcx_lstm_data
-from train_test_split import train_lstm_model, save_scaler
+from train_test_split import save_scaler, train_lstm_model
 
 
 def main():
@@ -42,10 +42,10 @@ def main():
 
     X_test, y_test = [], []
     for i in range(len(ohlc_test_scaled) - 30):
-        window = ohlc_test_scaled[i:i+30]
+        window = ohlc_test_scaled[i : i + 30]
         X_test.append(window)
-        next_close = ohlc_test[i+30, 3]
-        curr_close = ohlc_test[i+29, 3]
+        next_close = ohlc_test[i + 30, 3]
+        curr_close = ohlc_test[i + 29, 3]
         y_test.append(1 if next_close > curr_close else 0)
 
     X_test = np.array(X_test, dtype=np.float32)
@@ -54,8 +54,10 @@ def main():
 
     # 4) Train LSTM
     model = train_lstm_model(
-        X_train, y_train,
-        X_test, y_test,
+        X_train,
+        y_train,
+        X_test,
+        y_test,
         model_path=model_path,
     )
     if model is None:
@@ -69,6 +71,7 @@ def main():
     print(f"✓ Test data:  2021–2025 ({len(test_df)} bars)")
     print(f"✓ Model saved:  {model_path}")
     print(f"✓ Scaler saved: {scaler_path}")
+
 
 if __name__ == "__main__":
     main()

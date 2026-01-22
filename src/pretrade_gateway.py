@@ -4,25 +4,29 @@ Coordinates all 8 professional pre-trade checks before any trade execution.
 """
 
 import logging
-from typing import Dict, Any, List, Tuple
 from datetime import datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
+
 
 class PreTradeGateway:
     """
     Orchestrates all pre-trade checks in sequence.
     Returns a "go/no-go" decision with detailed reasoning.
     """
-    def __init__(self,
-                 fiscal_loader=None,
-                 global_cues=None,
-                 econ_calendar=None,
-                 currency_monitor=None,
-                 pivot_calc=None,
-                 signal_filter=None,
-                 geo_risk=None,
-                 risk_manager=None):
+
+    def __init__(
+        self,
+        fiscal_loader=None,
+        global_cues=None,
+        econ_calendar=None,
+        currency_monitor=None,
+        pivot_calc=None,
+        signal_filter=None,
+        geo_risk=None,
+        risk_manager=None,
+    ):
         self.fiscal_loader = fiscal_loader
         self.global_cues = global_cues
         self.econ_calendar = econ_calendar
@@ -35,7 +39,7 @@ class PreTradeGateway:
         self.checks_failed = []
         self.last_gateway_decision = None
 
-    def run_all_checks(self) -> Tuple[bool, Dict[str, Any]]:
+    def run_all_checks(self) -> tuple[bool, dict[str, Any]]:
         self.checks_passed = []
         self.checks_failed = []
         context = {
@@ -43,9 +47,9 @@ class PreTradeGateway:
             "gateway_status": "RUNNING",
             "checks": {},
         }
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("PRE-TRADE GATEWAY: Starting all checks")
-        print("="*70)
+        print("=" * 70)
         # CHECK 1: Duty Confirmation (CRITICAL - blocks if fails)
         duty_pass, duty_ctx = self._check_fiscal_policy()
         context["checks"]["fiscal_policy"] = duty_ctx
@@ -96,7 +100,8 @@ class PreTradeGateway:
         self._print_gateway_summary(all_pass, context)
         self.last_gateway_decision = (all_pass, context)
         return all_pass, context
-    def _check_fiscal_policy(self) -> Tuple[bool, Dict]:
+
+    def _check_fiscal_policy(self) -> tuple[bool, dict]:
         try:
             duty = self.fiscal_loader.validate_duty_before_trading()
             self.checks_passed.append("DUTY_CONFIRMATION")
@@ -104,7 +109,8 @@ class PreTradeGateway:
         except Exception as e:
             logger.error(f"Duty check failed: {e}")
             return False, {"status": "FAIL", "error": str(e)}
-    def _check_global_cues(self) -> Tuple[bool, Dict]:
+
+    def _check_global_cues(self) -> tuple[bool, dict]:
         try:
             bias = self.global_cues.get_bias()
             self.checks_passed.append("GLOBAL_CUES")
@@ -112,7 +118,8 @@ class PreTradeGateway:
         except Exception as e:
             logger.warning(f"Global cues check failed: {e}")
             return False, {"status": "FAIL", "error": str(e)}
-    def _check_economic_calendar(self) -> Tuple[bool, Dict]:
+
+    def _check_economic_calendar(self) -> tuple[bool, dict]:
         try:
             is_safe = self.econ_calendar.is_safe_to_trade()
             if is_safe:
@@ -123,7 +130,8 @@ class PreTradeGateway:
         except Exception as e:
             logger.warning(f"Economic calendar check failed: {e}")
             return False, {"status": "FAIL", "error": str(e)}
-    def _check_currency_monitor(self) -> Tuple[bool, Dict]:
+
+    def _check_currency_monitor(self) -> tuple[bool, dict]:
         try:
             is_stable = self.currency_monitor.is_currency_stable()
             vol = self.currency_monitor.get_usdinr_volatility()
@@ -135,7 +143,8 @@ class PreTradeGateway:
         except Exception as e:
             logger.warning(f"Currency monitor check failed: {e}")
             return False, {"status": "FAIL", "error": str(e)}
-    def _check_geopolitical_risk(self) -> Tuple[bool, Dict]:
+
+    def _check_geopolitical_risk(self) -> tuple[bool, dict]:
         try:
             risk_level = self.geo_risk.get_risk_level()
             if risk_level in ("LOW", "MEDIUM"):
@@ -146,11 +155,10 @@ class PreTradeGateway:
         except Exception as e:
             logger.warning(f"Geopolitical risk check failed: {e}")
             return False, {"status": "FAIL", "error": str(e)}
-    def _check_pivot_levels(self) -> Tuple[bool, Dict]:
+
+    def _check_pivot_levels(self) -> tuple[bool, dict]:
         try:
-            levels = self.pivot_calc.calculate_levels(
-                high=70000, low=68000, close=69000
-            )
+            levels = self.pivot_calc.calculate_levels(high=70000, low=68000, close=69000)
             if levels and all(k in levels for k in ["S2", "S1", "Pivot", "R1", "R2"]):
                 self.checks_passed.append("PIVOT_LEVELS")
                 return True, {"status": "PASS", "levels": levels}
@@ -159,7 +167,8 @@ class PreTradeGateway:
         except Exception as e:
             logger.warning(f"Pivot levels check failed: {e}")
             return False, {"status": "FAIL", "error": str(e)}
-    def _check_signal_confluence(self) -> Tuple[bool, Dict]:
+
+    def _check_signal_confluence(self) -> tuple[bool, dict]:
         try:
             confluence = self.signal_filter.check_confluence(
                 rsi=65, macd_hist=0.5, ema_9=69500, ema_21=69200
@@ -172,7 +181,8 @@ class PreTradeGateway:
         except Exception as e:
             logger.warning(f"Signal confluence check failed: {e}")
             return False, {"status": "FAIL", "error": str(e)}
-    def _check_risk_manager(self) -> Tuple[bool, Dict]:
+
+    def _check_risk_manager(self) -> tuple[bool, dict]:
         try:
             pos = self.risk_manager.calculate_position_size(69000, 68800)
             if pos > 0:
@@ -183,14 +193,15 @@ class PreTradeGateway:
         except Exception as e:
             logger.warning(f"Risk manager check failed: {e}")
             return False, {"status": "FAIL", "error": str(e)}
-    def _print_gateway_summary(self, all_pass: bool, context: Dict):
+
+    def _print_gateway_summary(self, all_pass: bool, context: dict):
         status_str = "✓ GO" if all_pass else "✗ NO-GO"
         print(f"\n{status_str} - Gateway Decision: {context['gateway_status']}")
         print(f"Checks passed: {len(context['checks_passed'])}/8")
         print(f"Checks failed: {len(context['checks_failed'])}/8")
-        if context['checks_failed']:
+        if context["checks_failed"]:
             print(f"\nFailed checks: {', '.join(context['checks_failed'])}")
             print("Trade execution BLOCKED until failures resolved.")
         else:
             print("\nAll checks passed. Trade execution APPROVED.")
-        print("="*70 + "\n")
+        print("=" * 70 + "\n")

@@ -4,11 +4,11 @@ MCX-specific date-based splitter using 'timestamp' column
 """
 
 import os
-from typing import Tuple
+
 import pandas as pd
 
 
-def split_mcx_data_by_date(csv_path: str, split_date: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def split_mcx_data_by_date(csv_path: str, split_date: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     if not os.path.exists(csv_path):
         print(f"ERROR: {csv_path} not found.")
         return None, None
@@ -25,7 +25,7 @@ def split_mcx_data_by_date(csv_path: str, split_date: str) -> Tuple[pd.DataFrame
     split_dt = pd.to_datetime(split_date)
 
     train_df = df[df["timestamp"] < split_dt].copy()
-    test_df  = df[df["timestamp"] >= split_dt].copy()
+    test_df = df[df["timestamp"] >= split_dt].copy()
 
     if train_df.empty or test_df.empty:
         print("ERROR: Train or test set is empty after split.")

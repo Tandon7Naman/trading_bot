@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+
 class BrokerInterface(ABC):
     """
     Protocol 7.1: The 'Iron Contract'.
@@ -34,7 +35,7 @@ class BrokerInterface(ABC):
             kwargs: 'sl', 'tp', 'type' (MARKET/LIMIT), 'tif', 'atr'.
         """
         pass
-    
+
     @abstractmethod
     def check_limits(self, current_price, symbol):
         """Checks if Price hit SL, TP, or Limit Orders."""
