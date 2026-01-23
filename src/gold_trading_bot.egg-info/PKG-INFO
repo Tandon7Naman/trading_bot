@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: gold-trading-bot
+Version: 0.1.0
+Summary: Institutional Grade Gold Trading Bot
+Requires-Python: >=3.13
+Description-Content-Type: text/markdown
+Requires-Dist: MetaTrader5
+Requires-Dist: stable-baselines3[extra]
+Requires-Dist: pandas
+Requires-Dist: ta
+Requires-Dist: optuna
+Requires-Dist: gymnasium

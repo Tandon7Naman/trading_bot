@@ -1,6 +1,64 @@
+
 from datetime import datetime
+from typing import Any
 
 import numpy as np
+import pandas as pd
+import pandas_ta as ta  # You may need to: uv add pandas_ta
+
+
+class TechnicalAnalysis:
+    """
+    Computes technical indicators for a given dataframe.
+    """
+
+    @staticmethod
+    def add_rsi(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
+        """
+        Adds Relative Strength Index (RSI) to the dataframe.
+
+        Args:
+            df (pd.DataFrame): Dataframe containing a 'close' column.
+            period (int): Lookback period for RSI (default 14).
+
+        Returns:
+            pd.DataFrame: The original dataframe with a new 'RSI' column.
+        """
+        if df.empty or 'close' not in df.columns:
+            return df
+
+        df['RSI'] = ta.rsi(df['close'], length=period)
+        return df
+
+    @staticmethod
+    def add_sma(df: pd.DataFrame, period: int = 50) -> pd.DataFrame:
+        """
+        Adds Simple Moving Average (SMA) to the dataframe.
+        """
+        if df.empty or 'close' not in df.columns:
+            return df
+
+        df[f'SMA_{period}'] = ta.sma(df['close'], length=period)
+        return df
+
+    @staticmethod
+    def get_latest_signal(df: pd.DataFrame) -> dict[str, Any]:
+        """
+        Extracts the latest technical signals from the dataframe.
+
+        Returns:
+            Dict[str, Any]: A dictionary containing the latest RSI and SMA values.
+        """
+        if df.empty:
+            return {"RSI": None, "SMA": None}
+
+        latest = df.iloc[-1]
+        return {
+            "RSI": float(latest.get('RSI', 0.0)),
+            "SMA": float(latest.get('SMA_50', 0.0)),
+            "Close": float(latest['close'])
+        }
+
 
 
 class FeatureEngine:

@@ -4,13 +4,15 @@ Gold Trading Bot - Production Version
 Uses proven rule-based technical analysis strategy
 """
 
-
 import json
+import logging
 import os
 import sys
 from datetime import datetime
+
 import pandas as pd
 from dotenv import load_dotenv
+
 from backtest_strategy_rulebased import RuleBasedBacktestEngine
 from fetch_market_news import main as fetch_news
 from paper_trading import PaperTradingEngine
@@ -25,15 +27,17 @@ from src.risk_manager import RiskManager
 from src.signal_confluence_filter import SignalConfluenceFilter
 from update_gld_data import main as update_gld_data
 from utils.notifier import TelegramNotifier
-from src.gold_trading_bot.config_schema import BotConfig
-from src.gold_trading_bot.utils.logger import logger, safe_execute
-from pydantic import ValidationError
+
+# Initialize the institutional logger
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler("logs/trading_bot.log"), logging.StreamHandler()],
+)
+logger = logging.getLogger("GoldTradingBot")
 
 load_dotenv()
 
-import logging
-
-logger = logging.getLogger("GoldTradingBot")
 logging.basicConfig(
     filename="logs/main_bot.log",
     level=logging.INFO,
@@ -41,80 +45,107 @@ logging.basicConfig(
 )
 
 
-
 class GoldTradingBot:
     """Main bot orchestrator with rule-based strategy"""
 
-    @safe_execute
-    def __init__(self, config: BotConfig, *args, **kwargs):
+    def __init__(self, account_size: float = 100000, *args, **kwargs):
         """
-        Initialize bot with integrated gateway modules and strict config.
+        Initialize bot with integrated gateway modules.
         """
-        self.config = config
-        self.telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-        self.telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
-        self.paper_trading_api_choice = config.mode
-        self.paper_trading_initial_capital = getattr(config, "initial_capital", 100000)
-        self.paper_trading_trade_quantity = getattr(config, "trade_quantity", 10)
-        self.backtest_tp_percent = getattr(config, "tp_percent", 2.0)
-        self.backtest_sl_percent = getattr(config, "sl_percent", 1.0)
+        try:
+            # Load configuration from environment variables
+            self.telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+            self.telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
+            self.paper_trading_api_choice = os.getenv("PAPER_TRADING_API_CHOICE", "paper")
+            self.paper_trading_initial_capital = float(
+                os.getenv("PAPER_TRADING_INITIAL_CAPITAL", "100000")
+            )
+            self.paper_trading_trade_quantity = int(os.getenv("PAPER_TRADING_TRADE_QUANTITY", "10"))
+            self.backtest_tp_percent = float(os.getenv("BACKTEST_TP_PERCENT", "2.0"))
+            self.backtest_sl_percent = float(os.getenv("BACKTEST_SL_PERCENT", "1.0"))
 
-        # Initialize paper trading
-        self.paper_trading = PaperTradingEngine(
-            api_choice=self.paper_trading_api_choice,
-            initial_capital=self.paper_trading_initial_capital,
-        )
+            # No longer using self.alerts; use TelegramNotifier directly
 
-        # ========== NEW: Initialize Gateway Modules ==========
-        self.fiscal_loader = FiscalPolicyLoader()
-        self.global_cues = GlobalCuesMonitor()
-        self.econ_calendar = EconomicCalendarMonitor()
-        self.currency_monitor = CurrencyMonitor()
-        self.pivot_calc = PivotLevelCalculator()
-        self.signal_filter = SignalConfluenceFilter()
-        self.geo_risk = GeopoliticalRiskMonitor()
-        self.risk_manager = RiskManager(account_size=self.paper_trading_initial_capital)
+            # Initialize paper trading
+            self.paper_trading = PaperTradingEngine(
+                api_choice=self.paper_trading_api_choice,
+                initial_capital=self.paper_trading_initial_capital,
+            )
 
-        self.pretrade_gateway = None
-        self.gateway_context = None
-        logger.info("Bot initialized successfully with strict config and institutional logger.")
+            # ========== NEW: Initialize Gateway Modules ==========
+            self.fiscal_loader = FiscalPolicyLoader()
+            self.global_cues = GlobalCuesMonitor()
+            self.econ_calendar = EconomicCalendarMonitor()
+            self.currency_monitor = CurrencyMonitor()
+            self.pivot_calc = PivotLevelCalculator()
+            self.signal_filter = SignalConfluenceFilter()
+            self.geo_risk = GeopoliticalRiskMonitor()
+            self.risk_manager = RiskManager(account_size=account_size)
+
+            self.pretrade_gateway = None
+            self.gateway_context = None
+            # =====================================================
+
+            logging.info("Bot initialized successfully")
+            print("[+] Bot initialized successfully")
+
+        except Exception as e:
+            logging.error(f"Error initializing bot: {str(e)}")
+            print(f"[-] Error initializing bot: {str(e)}")
+            raise
 
     def update_data(self):
         """Update GLD and news data"""
-        print("[*] Updating data...")
-        # Update GLD data
-        print("  [*] Updating GLD data...")
-        update_gld_data()
-
-        # Fetch news (optional)
-        print("  [*] Fetching market news...")
         try:
-            fetch_news()
-        except Exception as e:
-            logger.warning(f"News fetch failed: {str(e)}")
+            print("[*] Updating data...")
 
-        logger.info("Data updated successfully")
-        print("[+] Data updated successfully")
-        return True
+            # Update GLD data
+            print("  [*] Updating GLD data...")
+            update_gld_data()
+
+            # Fetch news (optional)
+            print("  [*] Fetching market news...")
+            try:
+                fetch_news()
+            except Exception as e:
+                logging.warning(f"News fetch failed: {str(e)}")
+
+            logging.info("Data updated successfully")
+            print("[+] Data updated successfully")
+            return True
+
+        except Exception as e:
+            logging.error(f"Error updating data: {str(e)}")
+            # Async notification for error
+            import asyncio
+
+            asyncio.run(TelegramNotifier.send_message(f"Data update failed: {str(e)}"))
+            print(f"[-] Error: {str(e)}")
+            return False
 
     def run_backtest_and_get_signals(self):
         """Run backtest and get live trading signals"""
-        print("[*] Running backtest analysis...")
         try:
+            print("[*] Running backtest analysis...")
+
             df = pd.read_csv("data/gld_data.csv")
+
             engine = RuleBasedBacktestEngine(
                 initial_capital=self.paper_trading_initial_capital,
                 tp_percent=self.backtest_tp_percent,
                 sl_percent=self.backtest_sl_percent,
             )
+
             # Generate signals
             df = engine.generate_signals(df)
+
             # Get latest signal
             latest_signal = df["Signal"].iloc[-1] if len(df) > 0 else 0
             latest_close = df["close"].iloc[-1] if len(df) > 0 else 0
             latest_ema20 = df["EMA_20"].iloc[-1] if "EMA_20" in df.columns else 0
             latest_ema50 = df["EMA_50"].iloc[-1] if "EMA_50" in df.columns else 0
             latest_rsi = df["RSI"].iloc[-1] if len(df) > 0 else 0
+
             signal_data = {
                 "timestamp": datetime.now().isoformat(),
                 "close": latest_close,
@@ -123,17 +154,20 @@ class GoldTradingBot:
                 "ema50": latest_ema50,
                 "rsi": latest_rsi,
             }
+
             if latest_signal == 1:
-                print(f"[+] BUY signal generated @ ₹{latest_close:.2f}")
-                logger.info(f"BUY signal: {latest_close}")
+                print(f"[+] BUY signal generated @ [20b9]{latest_close:.2f}")
+                logging.info(f"BUY signal: {latest_close}")
             elif latest_signal == -1:
-                print(f"[+] SELL signal generated @ ₹{latest_close:.2f}")
-                logger.info(f"SELL signal: {latest_close}")
+                print(f"[+] SELL signal generated @ [20b9]{latest_close:.2f}")
+                logging.info(f"SELL signal: {latest_close}")
             else:
-                print(f"[*] No signal (neutral) @ ₹{latest_close:.2f}")
+                print(f"[*] No signal (neutral) @ [20b9]{latest_close:.2f}")
+
             return signal_data
+
         except Exception as e:
-            logger.error(f"Error in backtest: {str(e)}")
+            logging.error(f"Error in backtest: {str(e)}")
             print(f"[-] Error: {str(e)}")
             return None
 
@@ -148,12 +182,13 @@ class GoldTradingBot:
             quantity = self.paper_trading_trade_quantity
             price = signal_data["close"]
             trade_id = f"BOT_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            result = False
+
             if signal_data["signal"] == 1:
                 result = self.paper_trading.place_buy_order(symbol, quantity, price, trade_id)
                 if result:
-                    msg = f"BUY {quantity} {symbol} @ ₹{price:.2f}"
+                    msg = f"BUY {quantity} {symbol} @ [20b9]{price:.2f}"
                     import asyncio
+
                     asyncio.run(
                         TelegramNotifier.notify_trade(
                             trade_type="BUY",
@@ -165,12 +200,14 @@ class GoldTradingBot:
                         )
                     )
                     print(f"[+] {msg}")
-                    logger.info(msg)
+                    logging.info(msg)
+
             elif signal_data["signal"] == -1:
                 result = self.paper_trading.place_sell_order(symbol, quantity, price, trade_id)
                 if result:
-                    msg = f"SELL {quantity} {symbol} @ ₹{price:.2f}"
+                    msg = f"SELL {quantity} {symbol} @ [20b9]{price:.2f}"
                     import asyncio
+
                     asyncio.run(
                         TelegramNotifier.notify_trade(
                             trade_type="SELL",
@@ -182,11 +219,14 @@ class GoldTradingBot:
                         )
                     )
                     print(f"[+] {msg}")
-                    logger.info(msg)
+                    logging.info(msg)
+
             return result
+
         except Exception as e:
-            logger.error(f"Error executing trade: {str(e)}")
+            logging.error(f"Error executing trade: {str(e)}")
             import asyncio
+
             asyncio.run(TelegramNotifier.send_message(f"Trade execution error: {str(e)}"))
             print(f"[-] Error: {str(e)}")
             return False
@@ -196,16 +236,20 @@ class GoldTradingBot:
         try:
             summary = self.paper_trading.get_account_summary()
             import asyncio
+
             asyncio.run(TelegramNotifier.send_message(f"Daily Summary: {summary}"))
+
             # Save summary
             os.makedirs("reports", exist_ok=True)
             with open(f"reports/summary_{datetime.now().strftime('%Y%m%d')}.json", "w") as f:
                 json.dump(summary, f, indent=2)
-            logger.info("Daily summary sent")
+
+            logging.info("Daily summary sent")
             print("[+] Daily summary sent via Telegram")
             return True
+
         except Exception as e:
-            logger.error(f"Error sending summary: {str(e)}")
+            logging.error(f"Error sending summary: {str(e)}")
             print(f"[-] Error: {str(e)}")
             return False
 
@@ -216,7 +260,7 @@ class GoldTradingBot:
         Sequence:
         1. Update data (prices, indicators)
         2. Initialize PreTradeGateway (all 8 checks)
-        3. If GO: Generate signals → Execute trades with RiskManager
+        3. If GO: Generate signals  Execute trades with RiskManager
         4. If NO-GO: Alert and skip trade execution
         5. Generate daily summary
         """
@@ -229,12 +273,12 @@ class GoldTradingBot:
             # ========== PHASE 1: Update Market Data ==========
             logger.info("[1/5] Updating market data and indicators...")
             self.update_data()
-            logger.info("✓ Market data updated")
+            logger.info(" Market data updated")
 
             # ========== PHASE 2: Initialize Gateway ==========
             logger.info("[2/5] Initializing pre-trade gateway...")
             self.pretrade_gateway = self._initialize_gateway()
-            logger.info("✓ Gateway initialized with 8 modules")
+            logger.info(" Gateway initialized with 8 modules")
 
             # ========== PHASE 3: Run Gateway Checks ==========
             logger.info("[3/5] Running unified pre-trade gateway checks...")
@@ -243,7 +287,7 @@ class GoldTradingBot:
 
             # Gate decision
             if not go_ahead:
-                logger.error("❌ GATEWAY BLOCKED TRADE EXECUTION")
+                logger.error(" GATEWAY BLOCKED TRADE EXECUTION")
                 logger.error(f"   Failed checks: {gateway_ctx['checks_failed']}")
 
                 # Alert stakeholders
@@ -255,7 +299,7 @@ class GoldTradingBot:
                 logger.info("Cycle completed (trades blocked by gateway)")
                 return
 
-            logger.info("✓ All gateway checks passed - TRADE EXECUTION APPROVED")
+            logger.info(" All gateway checks passed - TRADE EXECUTION APPROVED")
 
             # ========== PHASE 4: Generate Signals & Execute Trades ==========
             logger.info("[4/5] Generating trading signals...")
@@ -264,7 +308,7 @@ class GoldTradingBot:
             logger.info("[5/5] Executing trades with RiskManager...")
             self._execute_trades_with_risk(signals, gateway_ctx)
 
-            logger.info("✓ Trades executed successfully")
+            logger.info(" Trades executed successfully")
 
             # ========== PHASE 5: Daily Summary ==========
             logger.info("Generating daily summary...")
@@ -352,7 +396,7 @@ class GoldTradingBot:
         failed_checks = gateway_ctx.get("checks_failed", [])
 
         alert_msg = (
-            f"\n⚠️ TRADING BOT ALERT: Gateway Execution Blocked\n"
+            f"\n TRADING BOT ALERT: Gateway Execution Blocked\n"
             f"Timestamp: {gateway_ctx.get('timestamp')}\n"
             f"Failed Checks: {', '.join(failed_checks)}\n"
         )
@@ -386,31 +430,17 @@ class GoldTradingBot:
         # TODO: Log to file, database, or external system
 
 
-
-# --- Hardened Main Entry Point ---
-@safe_execute
 def main():
-    logger.info("Initializing Gold Trading Bot v2.0 (Institutional Hardened)...")
+    """Main entry point"""
     try:
-        # Load & Validate Configuration
-        config = BotConfig(
-            authorized_account_id=int(os.getenv("AUTHORIZED_ACCOUNT_ID", "5551234")),
-            symbol=os.getenv("SYMBOL", "XAUUSD"),
-            mode=os.getenv("MODE", "paper")
-        )
-        logger.info(f"Configuration locked. Mode: {config.mode.upper()}")
-    except ValidationError as e:
-        logger.critical(f"Configuration Security Violation:\n{e}")
+        bot = GoldTradingBot()
+        success = bot.run_full_cycle()
+        sys.exit(0 if success else 1)
+    except Exception as e:
+        print(f"[-] Fatal error: {str(e)}")
+        logging.error(f"Fatal error: {str(e)}")
         sys.exit(1)
 
-    # Security Check: Account ID Lock (pseudo, replace with actual MT5 check)
-    # current_login = mt5.account_info().login
-    # if current_login != config.authorized_account_id:
-    #     raise PermissionError(f"Account ID Mismatch! Expected {config.authorized_account_id}")
-
-    bot = GoldTradingBot(config)
-    success = bot.run_full_cycle()
-    sys.exit(0 if success else 1)
 
 if __name__ == "__main__":
     main()
