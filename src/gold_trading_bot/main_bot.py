@@ -4,6 +4,7 @@ Gold Trading Bot - Production Version
 Uses proven rule-based technical analysis strategy
 """
 
+
 import json
 import logging
 import os
@@ -14,7 +15,7 @@ import pandas as pd
 from dotenv import load_dotenv
 
 from backtest_strategy_rulebased import RuleBasedBacktestEngine
-from fetch_market_news import main as fetch_news
+# from fetch_market_news import main as fetch_news  # Removed news integration
 from paper_trading import PaperTradingEngine
 from src.currency_monitor import CurrencyMonitor
 from src.economic_calendar_monitor import EconomicCalendarMonitor

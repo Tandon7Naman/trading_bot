@@ -8,13 +8,7 @@ class ListenerConfig(BaseModel):
     api_secret: SecretStr = Field(..., description="Alpaca Secret Key")
 
     # Endpoint Configuration
-    # Use 'wss://stream.data.alpaca.markets/v1beta1/news' for real-time news
-    news_wss_url: str = "wss://stream.data.alpaca.markets/v1beta1/news"
-
-    # Redis Configuration (The "Hot Path" Message Bus)
-    redis_host: str = "localhost"
-    redis_port: int = 6379
-    redis_channel: str = "titan.news.raw"
+    # Removed news/sentiment/depository/tando config
 
     # Subscription Scope
     # We filter for major assets to reduce noise

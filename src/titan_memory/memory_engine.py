@@ -12,7 +12,7 @@ class TitanMemory:
     def __init__(self):
         # 1. Connect to Qdrant (Docker)
         self.client = QdrantClient(url="http://localhost:6333")
-        self.collection_name = "market_news_history"
+        # self.collection_name = "market_news_history"  # Removed news integration
 
         # 2. Load Embedding Model (Turns text into numbers)
         # 'all-MiniLM-L6-v2' is fast and efficient for this
@@ -32,7 +32,7 @@ class TitanMemory:
 
     def store_event(self, text, metadata):
         """
-        Saves a news event + sentiment into the Vector DB.
+        # Removed news event + sentiment logic from memory engine
         """
         # Create Vector
         vector = self.encoder.encode(text).tolist()
@@ -44,7 +44,7 @@ class TitanMemory:
             payload={
                 "text": text,
                 "timestamp": datetime.utcnow().isoformat(),
-                **metadata  # Stores sentiment_score, symbol, etc.
+                # **metadata  # Removed sentiment_score, symbol, etc.
             }
         )
 
@@ -75,7 +75,7 @@ if __name__ == "__main__":
 
     # Test Store
     test_headline = "Apple releases new AI glasses, stock jumps 5%"
-    mem.store_event(test_headline, {"sentiment": 0.8, "symbol": "AAPL"})
+    # mem.store_event(test_headline, {"sentiment": 0.8, "symbol": "AAPL"})  # Removed news/sentiment logic
     print("✅ Stored test event.")
 
     # Test Retrieve

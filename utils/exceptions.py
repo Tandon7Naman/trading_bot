@@ -22,7 +22,5 @@ class RiskViolationError(BotError):
     pass
 
 
-class NewsEventError(BotError):
-    """Raised when a High-Impact News event blocks trading."""
 
     pass

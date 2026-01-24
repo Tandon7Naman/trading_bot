@@ -105,9 +105,3 @@ class TitanNewsListener:
             time.sleep(self.reconnect_delay)
             self.reconnect_delay = min(self.reconnect_delay * 2, 60) # Cap at 60s
 
-if __name__ == "__main__":
-    bot = TitanNewsListener()
-    try:
-        bot.run()
-    except KeyboardInterrupt:
-        logger.info("🛑 Shutting down Listener...")
