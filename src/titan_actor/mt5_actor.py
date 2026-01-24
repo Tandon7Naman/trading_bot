@@ -8,10 +8,9 @@ import redis
 # --- CONFIGURATION ---
 # Note: You don't need API keys here if MT5 is already open and logged in!
 SYMBOL_MAP = {
-    "Gold Price": "XAUUSD",
-    "AAPL": "Apple", # Check your broker's specific symbol names!
-    "TSLA": "Tesla",
-    "EURUSD": "EURUSD"
+    "Gold Price": "GOLD",   # Example: Change XAUUSD to GOLD if that's what you see
+    "TSLA": "TSLA.US",      # Example: Some brokers use .US suffix
+    "AAPL": "AAPL.US",
 }
 
 # Configure Logging
