@@ -4,6 +4,25 @@ from config.settings import TELEGRAM_CONFIG
 
 
 class TelegramNotifier:
+
+        @staticmethod
+        def send_message_sync(text):
+            import asyncio
+            try:
+                asyncio.run(TelegramNotifier.send_message(text))
+            except RuntimeError:
+                # If already in an event loop, schedule as a task
+                loop = asyncio.get_event_loop()
+                loop.create_task(TelegramNotifier.send_message(text))
+
+        @staticmethod
+        def notify_trade_sync(trade_type, price, size, sl, tp, sentiment):
+            import asyncio
+            try:
+                asyncio.run(TelegramNotifier.notify_trade(trade_type, price, size, sl, tp, sentiment))
+            except RuntimeError:
+                loop = asyncio.get_event_loop()
+                loop.create_task(TelegramNotifier.notify_trade(trade_type, price, size, sl, tp, sentiment))
     """Protocol 5.3: Real-time trade and system alerts."""
 
     _bot = None

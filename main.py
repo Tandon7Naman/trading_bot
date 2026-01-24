@@ -14,6 +14,10 @@ from execution.risk_manager import CircuitBreaker
 from strategies.data_handler import DataHandler
 from strategies.xauusd_strategy import check_market
 from utils.run_scheduler import run_scheduler
+import schedule
+import time
+from src.gold_trading_bot.pre_market_routine import run_pre_market_analysis
+from src.gold_trading_bot.performance_tracker import generate_daily_report
 
 
 # --- PROTOCOL 1.1: THE DEFENSIVE SUPERVISOR ---
@@ -71,6 +75,22 @@ async def main():
     print("🤖 STARTING TRADING ENGINE...")
     print(f"   ACTIVE PIPELINES: {ENABLED_MARKETS}")
 
+    # Schedule pre-market routine at 08:00 AM every weekday
+    schedule.every().monday.at("08:00").do(run_pre_market_analysis)
+    schedule.every().tuesday.at("08:00").do(run_pre_market_analysis)
+    schedule.every().wednesday.at("08:00").do(run_pre_market_analysis)
+    schedule.every().thursday.at("08:00").do(run_pre_market_analysis)
+    schedule.every().friday.at("08:00").do(run_pre_market_analysis)
+    print("[SCHEDULER] Pre-market routine scheduled for 08:00 AM (Mon-Fri)")
+
+    # Schedule post-market analytics at 17:00 (5 PM) every weekday
+    schedule.every().monday.at("17:00").do(generate_daily_report)
+    schedule.every().tuesday.at("17:00").do(generate_daily_report)
+    schedule.every().wednesday.at("17:00").do(generate_daily_report)
+    schedule.every().thursday.at("17:00").do(generate_daily_report)
+    schedule.every().friday.at("17:00").do(generate_daily_report)
+    print("[SCHEDULER] Post-market analytics scheduled for 17:00 (Mon-Fri)")
+
     handlers = {}
     for symbol in ENABLED_MARKETS:
         config = ASSET_CONFIG[symbol]
@@ -90,6 +110,10 @@ async def main():
         # Pace the loop (Prevent CPU Spike/Logic Loop)
         await asyncio.sleep(1)
 
+    # Scheduler loop (non-blocking, runs alongside bot)
+    while True:
+        schedule.run_pending()
+        time.sleep(30)
 
 if __name__ == "__main__":
     # Start the EOD report scheduler in a background thread

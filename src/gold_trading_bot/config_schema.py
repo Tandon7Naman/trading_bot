@@ -16,6 +16,11 @@ class RiskSettings(BaseModel):
     max_lot_size: float = Field(1.0, gt=0, le=10.0, description="Safety ceiling for lot size")
 
 class BotConfig(BaseModel):
+        # Trading and backtest parameters (added for compatibility)
+        initial_capital: float = Field(100000, description="Initial capital for paper trading/backtest")
+        trade_quantity: int = Field(10, description="Default trade quantity")
+        tp_percent: float = Field(2.0, description="Take profit percent for backtest")
+        sl_percent: float = Field(1.0, description="Stop loss percent for backtest")
     """Master Configuration with Security Locks"""
     # Security: Lock bot to specific account ID to prevent trading on wrong account
     authorized_account_id: int = Field(..., description="MT5 Login ID Security Lock")

@@ -47,6 +47,19 @@ logging.basicConfig(
 
 
 class GoldTradingBot:
+            # --- SECURITY: Enforce account lock for MT5 if available ---
+            try:
+                import MetaTrader5 as mt5
+                if hasattr(self, 'config') and hasattr(self.config, 'authorized_account_id'):
+                    account_info = mt5.account_info()
+                    if account_info and hasattr(account_info, 'login'):
+                        current_login = account_info.login
+                        if current_login != self.config.authorized_account_id:
+                            raise PermissionError(f"MT5 account lock: Current login {current_login} does not match authorized_account_id {self.config.authorized_account_id}")
+            except ImportError:
+                logging.info("MetaTrader5 not installed; skipping MT5 account lock check.")
+            except Exception as e:
+                logging.warning(f"MT5 account lock check failed: {e}")
     """Main bot orchestrator with rule-based strategy"""
 
     def __init__(self, account_size: float = 100000, *args, **kwargs):
@@ -118,9 +131,7 @@ class GoldTradingBot:
         except Exception as e:
             logging.error(f"Error updating data: {str(e)}")
             # Async notification for error
-            import asyncio
-
-            asyncio.run(TelegramNotifier.send_message(f"Data update failed: {str(e)}"))
+            TelegramNotifier.send_message_sync(f"Data update failed: {str(e)}")
             print(f"[-] Error: {str(e)}")
             return False
 
@@ -129,7 +140,31 @@ class GoldTradingBot:
         try:
             print("[*] Running backtest analysis...")
 
-            df = pd.read_csv("data/gld_data.csv")
+
+            # --- Data Validation and Error Handling ---
+            try:
+                df = pd.read_csv("data/gld_data.csv")
+            except FileNotFoundError:
+                logging.error("data/gld_data.csv not found.")
+                print("[-] Error: data/gld_data.csv not found.")
+                return None
+            except Exception as e:
+                logging.error(f"Error reading data/gld_data.csv: {e}")
+                print(f"[-] Error reading data/gld_data.csv: {e}")
+                return None
+
+            # Schema validation
+            required_columns = {"close", "Signal", "EMA_20", "EMA_50", "RSI"}
+            if not required_columns.issubset(df.columns):
+                missing = required_columns - set(df.columns)
+                logging.error(f"Missing columns in data/gld_data.csv: {missing}")
+                print(f"[-] Error: Missing columns in data/gld_data.csv: {missing}")
+                return None
+
+            if df.empty:
+                logging.error("data/gld_data.csv is empty.")
+                print("[-] Error: data/gld_data.csv is empty.")
+                return None
 
             engine = RuleBasedBacktestEngine(
                 initial_capital=self.paper_trading_initial_capital,
@@ -188,17 +223,13 @@ class GoldTradingBot:
                 result = self.paper_trading.place_buy_order(symbol, quantity, price, trade_id)
                 if result:
                     msg = f"BUY {quantity} {symbol} @ [20b9]{price:.2f}"
-                    import asyncio
-
-                    asyncio.run(
-                        TelegramNotifier.notify_trade(
-                            trade_type="BUY",
-                            price=price,
-                            size=quantity,
-                            sl=0,
-                            tp=0,
-                            sentiment="Rule-Based Signal",
-                        )
+                    TelegramNotifier.notify_trade_sync(
+                        trade_type="BUY",
+                        price=price,
+                        size=quantity,
+                        sl=0,
+                        tp=0,
+                        sentiment="Rule-Based Signal",
                     )
                     print(f"[+] {msg}")
                     logging.info(msg)
@@ -207,17 +238,13 @@ class GoldTradingBot:
                 result = self.paper_trading.place_sell_order(symbol, quantity, price, trade_id)
                 if result:
                     msg = f"SELL {quantity} {symbol} @ [20b9]{price:.2f}"
-                    import asyncio
-
-                    asyncio.run(
-                        TelegramNotifier.notify_trade(
-                            trade_type="SELL",
-                            price=price,
-                            size=quantity,
-                            sl=0,
-                            tp=0,
-                            sentiment="Rule-Based Signal",
-                        )
+                    TelegramNotifier.notify_trade_sync(
+                        trade_type="SELL",
+                        price=price,
+                        size=quantity,
+                        sl=0,
+                        tp=0,
+                        sentiment="Rule-Based Signal",
                     )
                     print(f"[+] {msg}")
                     logging.info(msg)
@@ -226,9 +253,7 @@ class GoldTradingBot:
 
         except Exception as e:
             logging.error(f"Error executing trade: {str(e)}")
-            import asyncio
-
-            asyncio.run(TelegramNotifier.send_message(f"Trade execution error: {str(e)}"))
+            TelegramNotifier.send_message_sync(f"Trade execution error: {str(e)}")
             print(f"[-] Error: {str(e)}")
             return False
 
@@ -236,9 +261,7 @@ class GoldTradingBot:
         """Send daily trading summary via Telegram"""
         try:
             summary = self.paper_trading.get_account_summary()
-            import asyncio
-
-            asyncio.run(TelegramNotifier.send_message(f"Daily Summary: {summary}"))
+            TelegramNotifier.send_message_sync(f"Daily Summary: {summary}")
 
             # Save summary
             os.makedirs("reports", exist_ok=True)
@@ -304,7 +327,7 @@ class GoldTradingBot:
 
             # ========== PHASE 4: Generate Signals & Execute Trades ==========
             logger.info("[4/5] Generating trading signals...")
-            signals = self.generate_signals()
+            signals = [self.run_backtest_and_get_signals()]
 
             logger.info("[5/5] Executing trades with RiskManager...")
             self._execute_trades_with_risk(signals, gateway_ctx)
@@ -360,15 +383,56 @@ class GoldTradingBot:
 
         for signal in signals:
             try:
+
+                # Update peak balance and check drawdown protection
+                current_balance = self.paper_trading.current_balance if hasattr(self.paper_trading, 'current_balance') else self.risk_manager.account_size
+                self.risk_manager.update_peak_balance(current_balance)
+                if not self.risk_manager.check_drawdown_protection(current_balance):
+                    logger.error("Max drawdown limit reached. Circuit breaker activated. Halting trading.")
+                    TelegramNotifier.send_message_sync("🚨 Max drawdown limit reached. Circuit breaker activated. Trading halted.")
+                    break
+
                 # Check daily loss limit before trade
                 if not self.risk_manager.check_daily_loss_limit(0):
                     logger.warning("Daily loss limit reached. Skipping further trades.")
                     break
 
-                # Calculate position size using RiskManager
+
+                # --- ATR-based dynamic stop loss calculation ---
+                try:
+                    from src.utils.ta import calculate_atr
+                except ImportError:
+                    def calculate_atr(df, period=14):
+                        return None
+
+                # Assume df is available in scope or reload if needed
+                df = None
+                if 'df' in locals():
+                    pass
+                elif hasattr(self, 'latest_df'):
+                    df = self.latest_df
+                else:
+                    try:
+                        df = pd.read_csv("data/gld_data.csv")
+                    except Exception:
+                        df = None
+
+                atr_value = None
+                if df is not None and all(col in df.columns for col in ["high", "low", "close"]):
+                    atr_series = calculate_atr(df)
+                    if atr_series is not None and not atr_series.empty:
+                        atr_value = float(atr_series.iloc[-1])
+
+                entry_price = signal.get("entry", 0)
+                # Use ATR for stop loss if available, else fallback
+                if atr_value and entry_price:
+                    stop_loss_price = entry_price - atr_value
+                else:
+                    stop_loss_price = signal.get("stop_loss", 0)
+
                 position = self.risk_manager.calculate_position_size(
-                    entry_price=signal.get("entry", 0),
-                    stop_loss_price=signal.get("stop_loss", 0),
+                    entry_price=entry_price,
+                    stop_loss_price=stop_loss_price,
                 )
 
                 if position == 0:
@@ -380,8 +444,12 @@ class GoldTradingBot:
                     f"SL={signal.get('stop_loss')}, Position={position}"
                 )
 
-                # TODO: Replace with your actual broker API call
-                # result = self._place_order(signal, position, duty)
+                # Execute trade using the integrated broker logic (paper trading, MT5, Alpaca, etc.)
+                result = self.execute_live_trade(signal)
+                if result:
+                    logger.info(f"Trade executed successfully: {signal}")
+                else:
+                    logger.warning(f"Trade execution failed: {signal}")
 
             except Exception as e:
                 logger.error(f"Trade execution failed: {e}")
@@ -405,9 +473,7 @@ class GoldTradingBot:
         logger.warning(alert_msg)
 
         # Send Telegram alert for gateway failure
-        import asyncio
-
-        asyncio.run(TelegramNotifier.send_message(alert_msg))
+        TelegramNotifier.send_message_sync(alert_msg)
 
     def generate_daily_summary(self, gateway_blocked: bool = False):
         """

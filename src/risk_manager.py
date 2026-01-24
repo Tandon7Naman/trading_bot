@@ -2,6 +2,17 @@ import logging
 
 
 class RiskManager:
+
+        def update_peak_balance(self, current_balance):
+            if current_balance > self.peak_balance:
+                self.peak_balance = current_balance
+
+        def check_drawdown_protection(self, current_balance):
+            drawdown = (self.peak_balance - current_balance) / self.peak_balance
+            if drawdown >= (self.max_drawdown_pct / 100):
+                logging.error(f"Max drawdown limit reached ({drawdown*100:.2f}%) - CIRCUIT BREAKER ACTIVATED")
+                return False
+            return True
     """Professional risk management following Kelly Criterion and practical limits."""
 
     def __init__(self, account_size, max_loss_pct=2, max_drawdown_pct=5):
